@@ -1,19 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Windows.Forms;
 using NAPS2.Lang.Resources;
 using NAPS2.Ocr;
-using NAPS2.Util;
 
 namespace NAPS2.WinForms
 {
     public partial class FOcrLanguageDownload : FormBase
     {
-        private static readonly string DownloadBase = @"https://sourceforge.net/projects/naps2/files/components/tesseract-3.04/{0}/download";
-
         private readonly OcrDependencyManager ocrDependencyManager;
 
         public FOcrLanguageDownload(OcrDependencyManager ocrDependencyManager)
@@ -22,26 +17,32 @@ namespace NAPS2.WinForms
             InitializeComponent();
 
             var initialSelection = new HashSet<string>();
-            if (ocrDependencyManager.IsExecutableDownloaded && !ocrDependencyManager.IsNewExecutableDownloaded)
+            if (!ocrDependencyManager.HasNewTesseractExe)
             {
-                // Upgrade
-                foreach (var lang in ocrDependencyManager.GetDownloadedLanguages())
+                // The new OCR version hasn't been installed yet, so pre-select some languages
+                if (ocrDependencyManager.Components.Tesseract302.IsInstalled)
                 {
-                    initialSelection.Add(lang.Code);
+                    // Upgrading from an old version, so pre-select previously used languages
+                    foreach (var lang in ocrDependencyManager.Components.Tesseract302Languages.Where(x => x.Value.IsInstalled))
+                    {
+                        initialSelection.Add(lang.Key);
+                    }
+                }
+                else
+                {
+                    // Fresh install, so pre-select English as a sensible default
+                    initialSelection.Add("eng");
                 }
             }
-            else if (!ocrDependencyManager.IsExecutableDownloaded)
-            {
-                // Fresh install
-                initialSelection.Add("eng");
-            }
 
-            // Add missing languages to the list of language options
-            // Special case for English: sorted first, and checked by default
-            var languageOptions = this.ocrDependencyManager.GetMissingLanguages().OrderBy(x => x.Code == "eng" ? "AAA" : x.LangName);
+            // Populate the list of language options
+            // Special case for English: sorted to the top of the list
+            var languageOptions = ocrDependencyManager.Components.Tesseract304Languages.Where(x => !x.Value.IsInstalled)
+                .Select(x => ocrDependencyManager.Languages[x.Key])
+                .OrderBy(x => x.Code == "eng" ? "AAA" : x.Name);
             foreach (var languageOption in languageOptions)
             {
-                var item = new ListViewItem { Text = languageOption.LangName, Tag = languageOption };
+                var item = new ListViewItem { Text = languageOption.Name, Tag = languageOption.Code };
                 if (initialSelection.Contains(languageOption.Code))
                 {
                     item.Checked = true;
@@ -67,15 +68,21 @@ namespace NAPS2.WinForms
 
         private void UpdateView()
         {
-            double downloadSize =
-                lvLanguages.Items.Cast<ListViewItem>().Where(x => x.Checked).Select(x => ((OcrLanguage)x.Tag).Size).Sum();
-            if (!ocrDependencyManager.IsNewExecutableDownloaded)
+            var selectedLanguages = lvLanguages.Items.Cast<ListViewItem>().Where(x => x.Checked).Select(x => ((string)x.Tag));
+            double downloadSize = selectedLanguages.Select(x => ocrDependencyManager.Downloads.Tesseract304Languages[x].Size).Sum();
+
+            if (!ocrDependencyManager.Components.Tesseract304.IsInstalled && ocrDependencyManager.Components.Tesseract304.IsSupported)
             {
-                downloadSize += ocrDependencyManager.ExecutableFileSize;
+                downloadSize += ocrDependencyManager.Downloads.Tesseract304.Size;
             }
+            if (!ocrDependencyManager.Components.Tesseract304Xp.IsInstalled && !ocrDependencyManager.Components.Tesseract304.IsSupported)
+            {
+                downloadSize += ocrDependencyManager.Downloads.Tesseract304Xp.Size;
+            }
+
             labelSizeEstimate.Text = string.Format(MiscResources.EstimatedDownloadSize, downloadSize.ToString("f1"));
 
-            btnDownload.Enabled = lvLanguages.Items.Cast<ListViewItem>().Any(x => x.Checked);
+            btnDownload.Enabled = lvLanguages.Items.Cast<ListViewItem>().Any(x => x.Checked) || ocrDependencyManager.TesseractExeRequiresFix;
         }
 
         private void lvLanguages_ItemChecked(object sender, ItemCheckedEventArgs e)
@@ -91,50 +98,28 @@ namespace NAPS2.WinForms
         private void btnDownload_Click(object sender, EventArgs e)
         {
             var progressForm = FormFactory.Create<FDownloadProgress>();
-            if (!ocrDependencyManager.IsNewExecutableDownloaded)
+
+            if (!ocrDependencyManager.Components.Tesseract304.IsInstalled && ocrDependencyManager.Components.Tesseract304.IsSupported)
             {
-                progressForm.QueueFile(DownloadBase, ocrDependencyManager.ExecutableFileName, ocrDependencyManager.ExecutableFileSha1, tempPath =>
-                {
-                    string exeFilePath = Path.Combine(ocrDependencyManager.GetExecutableDir().FullName,
-                        ocrDependencyManager.ExecutableFileName.Replace(".gz", ""));
-                    DecompressFile(tempPath, exeFilePath);
-                });
+                progressForm.QueueFile(ocrDependencyManager.Downloads.Tesseract304,
+                    path => ocrDependencyManager.Components.Tesseract304.Install(path));
             }
+            if (!ocrDependencyManager.Components.Tesseract304Xp.IsInstalled && !ocrDependencyManager.Components.Tesseract304.IsSupported)
+            {
+                progressForm.QueueFile(ocrDependencyManager.Downloads.Tesseract304Xp,
+                    path => ocrDependencyManager.Components.Tesseract304Xp.Install(path));
+            }
+
             foreach (
-                var lang in
-                    lvLanguages.Items.Cast<ListViewItem>().Where(x => x.Checked).Select(x => (OcrLanguage)x.Tag))
+                var langCode in
+                    lvLanguages.Items.Cast<ListViewItem>().Where(x => x.Checked).Select(x => (string)x.Tag))
             {
-                progressForm.QueueFile(DownloadBase, lang.Filename, lang.Sha1, tempPath =>
-                {
-                    string langFilePath = Path.Combine(ocrDependencyManager.GetLanguageDir().FullName,
-                        lang.Filename.Replace(".gz", ""));
-                    DecompressFile(tempPath, langFilePath);
-                });
+                progressForm.QueueFile(ocrDependencyManager.Downloads.Tesseract304Languages[langCode],
+                    path => ocrDependencyManager.Components.Tesseract304Languages[langCode].Install(path));
             }
+
             Close();
             progressForm.ShowDialog();
-        }
-
-        private static void DecompressFile(string sourcePath, string destPath)
-        {
-            try
-            {
-                using (FileStream inFile = new FileInfo(sourcePath).OpenRead())
-                {
-                    using (FileStream outFile = File.Create(destPath))
-                    {
-                        using (GZipStream decompress = new GZipStream(inFile, CompressionMode.Decompress))
-                        {
-                            decompress.CopyTo(outFile);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.ErrorException("Error extracting OCR file", ex);
-                MessageBox.Show(MiscResources.FilesCouldNotBeDownloaded, MiscResources.DownloadError, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
     }
 }

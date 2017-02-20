@@ -48,14 +48,13 @@ using NAPS2.Scan;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
 using NAPS2.Scan.Wia;
-using NAPS2.Update;
 using NAPS2.Util;
 
 #endregion
 
 namespace NAPS2.WinForms
 {
-    public partial class FDesktop : FormBase, IAutoUpdaterClient
+    public partial class FDesktop : FormBase
     {
         #region Dependencies
 
@@ -64,7 +63,6 @@ namespace NAPS2.WinForms
         private readonly StringWrapper stringWrapper;
         private readonly AppConfigManager appConfigManager;
         private readonly RecoveryManager recoveryManager;
-        private readonly AutoUpdaterUI autoUpdaterUI;
         private readonly OcrDependencyManager ocrDependencyManager;
         private readonly IProfileManager profileManager;
         private readonly IScanPerformer scanPerformer;
@@ -95,14 +93,13 @@ namespace NAPS2.WinForms
 
         #region Initialization and Culture
 
-        public FDesktop(IEmailer emailer, StringWrapper stringWrapper, AppConfigManager appConfigManager, RecoveryManager recoveryManager, IScannedImageImporter scannedImageImporter, AutoUpdaterUI autoUpdaterUI, OcrDependencyManager ocrDependencyManager, IProfileManager profileManager, IScanPerformer scanPerformer, IScannedImagePrinter scannedImagePrinter, ChangeTracker changeTracker, EmailSettingsContainer emailSettingsContainer, FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, PdfSettingsContainer pdfSettingsContainer, StillImage stillImage, IOperationFactory operationFactory, IUserConfigManager userConfigManager, KeyboardShortcutManager ksm, ThumbnailRenderer thumbnailRenderer, DialogHelper dialogHelper)
+        public FDesktop(IEmailer emailer, StringWrapper stringWrapper, AppConfigManager appConfigManager, RecoveryManager recoveryManager, IScannedImageImporter scannedImageImporter, OcrDependencyManager ocrDependencyManager, IProfileManager profileManager, IScanPerformer scanPerformer, IScannedImagePrinter scannedImagePrinter, ChangeTracker changeTracker, EmailSettingsContainer emailSettingsContainer, FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, PdfSettingsContainer pdfSettingsContainer, StillImage stillImage, IOperationFactory operationFactory, IUserConfigManager userConfigManager, KeyboardShortcutManager ksm, ThumbnailRenderer thumbnailRenderer, DialogHelper dialogHelper)
         {
             this.emailer = emailer;
             this.stringWrapper = stringWrapper;
             this.appConfigManager = appConfigManager;
             this.recoveryManager = recoveryManager;
             this.scannedImageImporter = scannedImageImporter;
-            this.autoUpdaterUI = autoUpdaterUI;
             this.ocrDependencyManager = ocrDependencyManager;
             this.profileManager = profileManager;
             this.scanPerformer = scanPerformer;
@@ -139,6 +136,7 @@ namespace NAPS2.WinForms
             thumbnailList1.ThumbnailRenderer = thumbnailRenderer;
             int thumbnailSize = UserConfigManager.Config.ThumbnailSize;
             thumbnailList1.ThumbnailSize = new Size(thumbnailSize, thumbnailSize);
+            SetThumbnailSpacing(thumbnailSize);
 
             if (appConfigManager.Config.HideEmailButton)
             {
@@ -322,10 +320,6 @@ namespace NAPS2.WinForms
 
             // If NAPS2 was started by the scanner button, do the appropriate actions automatically
             RunStillImageEvents();
-
-            // Automatic updates
-            // Not yet enabled
-            // autoUpdaterUI.OnApplicationStart(this);
         }
 
         #endregion
@@ -1142,9 +1136,19 @@ namespace NAPS2.WinForms
 
         private void tsOcr_Click(object sender, EventArgs e)
         {
-            if (ocrDependencyManager.IsExecutableDownloaded && ocrDependencyManager.GetDownloadedLanguages().Any())
+            if (ocrDependencyManager.TesseractExeRequiresFix && !appConfigManager.Config.NoUpdatePrompt)
             {
-                if (!ocrDependencyManager.IsNewExecutableDownloaded && !appConfigManager.Config.NoUpdatePrompt)
+                // Re-download a fixed version on Windows XP if needed
+                MessageBox.Show(MiscResources.OcrUpdateAvailable, "", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var progressForm = FormFactory.Create<FDownloadProgress>();
+                progressForm.QueueFile(ocrDependencyManager.Downloads.Tesseract304Xp,
+                    path => ocrDependencyManager.Components.Tesseract304Xp.Install(path));
+                progressForm.ShowDialog();
+            }
+
+            if (ocrDependencyManager.InstalledTesseractExe != null && ocrDependencyManager.InstalledTesseractLanguages.Any())
+            {
+                if (!ocrDependencyManager.HasNewTesseractExe && !appConfigManager.Config.NoUpdatePrompt)
                 {
                     MessageBox.Show(MiscResources.OcrUpdateAvailable, "", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     FormFactory.Create<FOcrLanguageDownload>().ShowDialog();
@@ -1154,7 +1158,7 @@ namespace NAPS2.WinForms
             else
             {
                 FormFactory.Create<FOcrLanguageDownload>().ShowDialog();
-                if (ocrDependencyManager.IsExecutableDownloaded && ocrDependencyManager.GetDownloadedLanguages().Any())
+                if (ocrDependencyManager.InstalledTesseractExe != null && ocrDependencyManager.InstalledTesseractLanguages.Any())
                 {
                     FormFactory.Create<FOcrSetup>().ShowDialog();
                 }
@@ -1477,29 +1481,6 @@ namespace NAPS2.WinForms
 
         #endregion
 
-        #region Auto Update
-
-        public void UpdateAvailable(VersionInfo versionInfo)
-        {
-            Invoke(() => autoUpdaterUI.PerformUpdate(this, versionInfo));
-        }
-
-        public void InstallComplete()
-        {
-            Invoke(() =>
-            {
-                switch (MessageBox.Show(MiscResources.InstallCompletePromptRestart, MiscResources.InstallComplete, MessageBoxButtons.YesNo, MessageBoxIcon.Question))
-                {
-                    case DialogResult.Yes:
-                        Close(); // TODO: This close might be canceled. Handle that.
-                        Process.Start(Application.ExecutablePath);
-                        break;
-                }
-            });
-        }
-
-        #endregion
-
         #region Context Menu
 
         private void contextMenuStrip_Opening(object sender, System.ComponentModel.CancelEventArgs e)
@@ -1690,9 +1671,29 @@ namespace NAPS2.WinForms
             thumbnailList1.ThumbnailSize = new Size(thumbnailSize, thumbnailSize);
             thumbnailList1.RegenerateThumbnailList(imageList.Images);
 
+            SetThumbnailSpacing(thumbnailSize);
+
             // Render high-quality thumbnails at the new size in a background task
             // The existing (poorly scaled) thumbnails are used in the meantime
             RenderThumbnails(thumbnailSize, imageList.Images.ToList());
+        }
+
+        private void SetThumbnailSpacing(int thumbnailSize)
+        {
+            thumbnailList1.Padding = new Padding(0, 20, 0, 0);
+            const int MIN_PADDING = 6;
+            const int MAX_PADDING = 18;
+            // Linearly scale the padding with the thumbnail size
+            int padding = MIN_PADDING + (MAX_PADDING - MIN_PADDING) * (thumbnailSize - ThumbnailRenderer.MIN_SIZE) / (ThumbnailRenderer.MAX_SIZE - ThumbnailRenderer.MIN_SIZE);
+            int spacing = thumbnailSize + padding * 2;
+            SetListSpacing(thumbnailList1, spacing, spacing);
+        }
+
+        private void SetListSpacing(ListView list, int hspacing, int vspacing)
+        {
+            const int LVM_FIRST = 0x1000;
+            const int LVM_SETICONSPACING = LVM_FIRST + 53;
+            Win32.SendMessage(list.Handle, LVM_SETICONSPACING, IntPtr.Zero, (IntPtr) (int) (((ushort) hspacing) | (uint) (vspacing << 16)));
         }
 
         private void RenderThumbnails(int thumbnailSize, IEnumerable<ScannedImage> imagesToRenderThumbnailsFor)

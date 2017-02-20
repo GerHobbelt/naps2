@@ -36,7 +36,6 @@ namespace NAPS2.ImportExport.Images
 {
     public class SaveImagesOperation : OperationBase
     {
-        private readonly IErrorOutput errorOutput;
         private readonly FileNamePlaceholders fileNamePlaceholders;
         private readonly ImageSettingsContainer imageSettingsContainer;
         private readonly IOverwritePrompt overwritePrompt;
@@ -45,9 +44,8 @@ namespace NAPS2.ImportExport.Images
         private bool cancel;
         private Thread thread;
 
-        public SaveImagesOperation(IErrorOutput errorOutput, FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, IOverwritePrompt overwritePrompt, ThreadFactory threadFactory)
+        public SaveImagesOperation(FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, IOverwritePrompt overwritePrompt, ThreadFactory threadFactory)
         {
-            this.errorOutput = errorOutput;
             this.fileNamePlaceholders = fileNamePlaceholders;
             this.imageSettingsContainer = imageSettingsContainer;
             this.overwritePrompt = overwritePrompt;
@@ -80,6 +78,12 @@ namespace NAPS2.ImportExport.Images
                 try
                 {
                     var subFileName = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime, batch);
+                    if (Directory.Exists(subFileName))
+                    {
+                        // Not supposed to be a directory, but ok...
+                        fileName = Path.Combine(subFileName, "$(n).jpg");
+                        subFileName = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime, batch);
+                    }
                     ImageFormat format = GetImageFormat(subFileName);
 
                     if (Equals(format, ImageFormat.Tiff))
@@ -151,16 +155,16 @@ namespace NAPS2.ImportExport.Images
                         i++;
                     }
 
-                    Status.Success = true;
+                    Status.Success = FirstFileSaved != null;
                 }
-                catch (UnauthorizedAccessException)
+                catch (UnauthorizedAccessException ex)
                 {
-                    InvokeError(MiscResources.DontHavePermission);
+                    InvokeError(MiscResources.DontHavePermission, ex);
                 }
                 catch (Exception ex)
                 {
                     Log.ErrorException(MiscResources.ErrorSaving, ex);
-                    InvokeError(MiscResources.ErrorSaving);
+                    InvokeError(MiscResources.ErrorSaving, ex);
                 }
                 finally
                 {
@@ -194,9 +198,13 @@ namespace NAPS2.ImportExport.Images
             cancel = true;
         }
 
-        public void WaitUntilFinished()
+        public void WaitUntilFinished(bool throwOnError = true)
         {
             thread.Join();
+            if (throwOnError && LastError != null)
+            {
+                throw new Exception(LastError.ErrorMessage, LastError.Exception);
+            }
         }
 
         private static ImageFormat GetImageFormat(string fileName)

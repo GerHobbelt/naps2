@@ -20,9 +20,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using NAPS2.Config;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
@@ -34,14 +36,16 @@ namespace NAPS2.Scan.Wia
     {
         public const string DRIVER_NAME = "wia";
 
-        private readonly IWiaTransfer wiaTransfer;
+        private readonly IWiaTransfer backgroundWiaTransfer;
+        private readonly IWiaTransfer foregroundWiaTransfer;
         private readonly ThreadFactory threadFactory;
         private readonly IBlankDetector blankDetector;
         private readonly ThumbnailRenderer thumbnailRenderer;
 
-        public WiaScanDriver(IWiaTransfer wiaTransfer, ThreadFactory threadFactory, IBlankDetector blankDetector, ThumbnailRenderer thumbnailRenderer)
+        public WiaScanDriver(BackgroundWiaTransfer backgroundWiaTransfer, ForegroundWiaTransfer foregroundWiaTransfer, ThreadFactory threadFactory, IBlankDetector blankDetector, ThumbnailRenderer thumbnailRenderer)
         {
-            this.wiaTransfer = wiaTransfer;
+            this.backgroundWiaTransfer = backgroundWiaTransfer;
+            this.foregroundWiaTransfer = foregroundWiaTransfer;
             this.threadFactory = threadFactory;
             this.blankDetector = blankDetector;
             this.thumbnailRenderer = thumbnailRenderer;
@@ -54,7 +58,12 @@ namespace NAPS2.Scan.Wia
 
         protected override ScanDevice PromptForDeviceInternal()
         {
-            return WiaApi.PromptForDevice();
+            return WiaApi.PromptForScanDevice();
+        }
+
+        protected override List<ScanDevice> GetDeviceListInternal()
+        {
+            return WiaApi.GetScanDeviceList();
         }
 
         protected override IEnumerable<ScannedImage> ScanInternal()
@@ -72,16 +81,30 @@ namespace NAPS2.Scan.Wia
                     throw new NoDuplexSupportException();
                 }
                 int pageNumber = 1;
-                bool cancel;
+                int retryCount = 0;
+                bool retry = false;
+                bool cancel = false;
                 do
                 {
                     ScannedImage image;
                     try
                     {
-                        image = TransferImage(eventLoop, pageNumber++, out cancel);
+                        image = TransferImage(eventLoop, pageNumber, out cancel);
+                        pageNumber++;
+                        Debug.WriteLine("Succeeded with retry count {0}", retryCount);
+                        retryCount = 0;
+                        retry = false;
                     }
-                    catch (ScanDriverException)
+                    catch (ScanDriverException e)
                     {
+                        if (e.InnerException is COMException && (uint)((COMException) e.InnerException).ErrorCode == 0x80004005 && retryCount < 10)
+                        {
+                            Thread.Sleep(1000);
+                            retryCount += 1;
+                            Debug.WriteLine("Retrying {0}", retryCount);
+                            retry = true;
+                            continue;
+                        }
                         throw;
                     }
                     catch (Exception e)
@@ -92,7 +115,7 @@ namespace NAPS2.Scan.Wia
                     {
                         yield return image;
                     }
-                } while (!cancel && ScanProfile.PaperSource != ScanSource.Glass);
+                } while (retry || (!cancel && ScanProfile.PaperSource != ScanSource.Glass));
             }
         }
 
@@ -100,8 +123,8 @@ namespace NAPS2.Scan.Wia
         {
             try
             {
-                // TODO: Use the NoUI flag uniformly
-                var transfer = ScanParams.NoUI ? new ConsoleWiaTransfer() : wiaTransfer;
+                var transfer = ScanParams.NoUI ? backgroundWiaTransfer : foregroundWiaTransfer;
+                ChaosMonkey.MaybeError(0.5, new COMException("Fail", -2147467259));
                 using (var stream = transfer.Transfer(pageNumber, eventLoop, WiaApi.Formats.BMP))
                 {
                     if (stream == null)
@@ -121,7 +144,7 @@ namespace NAPS2.Scan.Wia
                             ScanBitDepth bitDepth = ScanProfile.UseNativeUI ? ScanBitDepth.C24Bit : ScanProfile.BitDepth;
                             var image = new ScannedImage(result, bitDepth, ScanProfile.MaxQuality, ScanProfile.Quality);
                             image.SetThumbnail(thumbnailRenderer.RenderThumbnail(result));
-                            ScannedImageHelper.PostProcessStep2(image, ScanProfile, pageNumber);
+                            ScannedImageHelper.PostProcessStep2(image, result, ScanProfile, ScanParams, pageNumber);
                             return image;
                         }
                     }

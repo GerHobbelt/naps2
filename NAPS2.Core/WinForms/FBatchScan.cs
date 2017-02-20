@@ -189,22 +189,6 @@ namespace NAPS2.WinForms
             {
                 comboProfile.Text = "";
             }
-            ProfileChanged();
-        }
-
-        private bool ProfileIsTwain()
-        {
-            var profile = (ScanProfile)comboProfile.SelectedItem;
-            if (profile != null)
-            {
-                return profile.DriverName == TwainScanDriver.DRIVER_NAME;
-            }
-            return false;
-        }
-
-        private void ProfileChanged()
-        {
-            rdSeparateByPatchT.Enabled = ProfileIsTwain();
         }
 
         private void rdSingleScan_CheckedChanged(object sender, EventArgs e)
@@ -323,7 +307,6 @@ namespace NAPS2.WinForms
         {
             EnableDisable(groupboxScanConfig, enabled);
             EnableDisable(groupboxOutput, enabled);
-            rdSeparateByPatchT.Enabled = enabled && ProfileIsTwain();
         }
 
         private void EnableDisable(Control root, bool enabled)
@@ -359,13 +342,17 @@ namespace NAPS2.WinForms
                 if (ex is ScanDriverUnknownException)
                 {
                     Log.ErrorException("Error in batch scan", ex);
+                    errorOutput.DisplayError(ex.Message, ex);
                 }
-                errorOutput.DisplayError(ex.Message);
+                else
+                {
+                    errorOutput.DisplayError(ex.Message);
+                }
             }
             catch (Exception ex)
             {
                 Log.ErrorException("Error in batch scan", ex);
-                errorOutput.DisplayError(MiscResources.BatchError);
+                errorOutput.DisplayError(MiscResources.BatchError, ex);
                 Invoke(() =>
                 {
                     lblStatus.Text = MiscResources.BatchStatusError;
@@ -429,11 +416,6 @@ namespace NAPS2.WinForms
             {
                 txtFilePath.Text = form.FileName;
             }
-        }
-
-        private void comboProfile_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            ProfileChanged();
         }
     }
 }

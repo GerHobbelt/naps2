@@ -1,10 +1,32 @@
-﻿using System;
+﻿/*
+    NAPS2 (Not Another PDF Scanner 2)
+    http://sourceforge.net/projects/naps2/
+    
+    Copyright (C) 2009       Pavel Sorejs
+    Copyright (C) 2012       Michael Adams
+    Copyright (C) 2013       Peter De Leeuw
+    Copyright (C) 2016       Alexander Rabenstein
+    Copyright (C) 2012-2016  Ben Olden-Cooligan
+
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+*/
+
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using NAPS2.Scan.Images.Transforms;
+using ZXing;
 
 namespace NAPS2.Scan.Images
 {
@@ -113,18 +135,28 @@ namespace NAPS2.Scan.Images
                 if (pageDimensions.Width > pageDimensions.Height && width < height)
                 {
                     // Flip dimensions
-                    result.SetResolution((float)(output.Width / pageDimensions.HeightInInches()), (float)(output.Height / pageDimensions.WidthInInches()));
+                    result = new CropTransform
+                    {
+                        Right = (int)((width - (float)pageDimensions.HeightInInches()) * output.HorizontalResolution),
+                        Bottom = (int)((height - (float)pageDimensions.WidthInInches()) * output.VerticalResolution)
+                    }.Perform(result);
+                    // result.SetResolution((float)(output.Width / pageDimensions.HeightInInches()), (float)(output.Height / pageDimensions.WidthInInches()));
                 }
                 else
                 {
-                    result.SetResolution((float)(output.Width / pageDimensions.WidthInInches()), (float)(output.Height / pageDimensions.HeightInInches()));
+                    result = new CropTransform
+                    {
+                        Right = (int)((width - (float)pageDimensions.WidthInInches()) * output.HorizontalResolution),
+                        Bottom = (int)((height - (float)pageDimensions.HeightInInches()) * output.VerticalResolution)
+                    }.Perform(result);
+                    //result.SetResolution((float)(output.Width / pageDimensions.WidthInInches()), (float)(output.Height / pageDimensions.HeightInInches()));
                 }
             }
 
             return result;
         }
 
-        public static void PostProcessStep2(ScannedImage image, ScanProfile profile, int pageNumber)
+        public static void PostProcessStep2(ScannedImage image, Bitmap bitmap, ScanProfile profile, ScanParams scanParams, int pageNumber)
         {
             if (!profile.UseNativeUI && profile.BrightnessContrastAfterScan)
             {
@@ -140,6 +172,35 @@ namespace NAPS2.Scan.Images
             if (profile.FlipDuplexedPages && pageNumber % 2 == 0)
             {
                 AddTransformAndUpdateThumbnail(image, new RotationTransform(RotateFlipType.Rotate180FlipNone));
+            }
+            if (scanParams.DetectPatchCodes && image.PatchCode == PatchCode.None)
+            {
+                IBarcodeReader reader = new BarcodeReader();
+                var barcodeResult = reader.Decode(bitmap);
+                if (barcodeResult != null)
+                {
+                    switch (barcodeResult.Text)
+                    {
+                        case "PATCH1":
+                            image.PatchCode = PatchCode.Patch1;
+                            break;
+                        case "PATCH2":
+                            image.PatchCode = PatchCode.Patch2;
+                            break;
+                        case "PATCH3":
+                            image.PatchCode = PatchCode.Patch3;
+                            break;
+                        case "PATCH4":
+                            image.PatchCode = PatchCode.Patch4;
+                            break;
+                        case "PATCH6":
+                            image.PatchCode = PatchCode.Patch6;
+                            break;
+                        case "PATCHT":
+                            image.PatchCode = PatchCode.PatchT;
+                            break;
+                    }
+                }
             }
         }
 

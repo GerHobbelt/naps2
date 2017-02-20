@@ -62,6 +62,11 @@ namespace NAPS2.ImportExport.Pdf
             };
             cancel = false;
 
+            if (Directory.Exists(subFileName))
+            {
+                // Not supposed to be a directory, but ok...
+                subFileName = fileNamePlaceholders.SubstitutePlaceholders(Path.Combine(subFileName, "$(n).pdf"), dateTime);
+            }
             if (File.Exists(subFileName))
             {
                 if (overwritePrompt.ConfirmOverwrite(subFileName) != DialogResult.Yes)
@@ -81,14 +86,26 @@ namespace NAPS2.ImportExport.Pdf
                         return !cancel;
                     });
                 }
-                catch (UnauthorizedAccessException)
+                catch (UnauthorizedAccessException ex)
                 {
-                    InvokeError(MiscResources.DontHavePermission);
+                    InvokeError(MiscResources.DontHavePermission, ex);
+                }
+                catch (IOException ex)
+                {
+                    if (File.Exists(subFileName))
+                    {
+                        InvokeError(MiscResources.FileInUse, ex);
+                    }
+                    else
+                    {
+                        Log.ErrorException(MiscResources.ErrorSaving, ex);
+                        InvokeError(MiscResources.ErrorSaving, ex);
+                    }
                 }
                 catch (Exception ex)
                 {
                     Log.ErrorException(MiscResources.ErrorSaving, ex);
-                    InvokeError(MiscResources.ErrorSaving);
+                    InvokeError(MiscResources.ErrorSaving, ex);
                 }
                 GC.Collect();
                 InvokeFinished();
