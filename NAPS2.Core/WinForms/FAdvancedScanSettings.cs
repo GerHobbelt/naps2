@@ -57,6 +57,7 @@ namespace NAPS2.WinForms
             txtWhiteThreshold.Text = scanProfile.BlankPageWhiteThreshold.ToString("G");
             tbCoverageThreshold.Value = scanProfile.BlankPageCoverageThreshold;
             txtCoverageThreshold.Text = scanProfile.BlankPageCoverageThreshold.ToString("G");
+            cbStretchHistogram.Checked = scanProfile.StretchHistogram;
         }
 
         private void UpdateEnabled()
@@ -95,6 +96,7 @@ namespace NAPS2.WinForms
             ScanProfile.ExcludeBlankPages = cbExcludeBlankPages.Checked;
             ScanProfile.BlankPageWhiteThreshold = tbWhiteThreshold.Value;
             ScanProfile.BlankPageCoverageThreshold = tbCoverageThreshold.Value;
+            ScanProfile.StretchHistogram = cbStretchHistogram.Checked;
         }
 
         private void btnOK_Click(object sender, EventArgs e)
