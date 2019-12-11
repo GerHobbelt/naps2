@@ -185,6 +185,10 @@ namespace NAPS2.Scan.Images
             {
                 return;
             }
+            if(profile.StretchHistogram && !profile.HistogramStretchConfig.IsNull)
+            {
+                AddTransformAndUpdateThumbnail(image, ref bitmap, new StretchHistogramTransform { Parameters = profile.HistogramStretchConfig });
+            }
             if ((!profile.UseNativeUI || !supportsNativeUI) && profile.BrightnessContrastAfterScan)
             {
                 if (profile.Brightness != 0)

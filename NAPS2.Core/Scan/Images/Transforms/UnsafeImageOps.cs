@@ -424,6 +424,43 @@ namespace NAPS2.Scan.Images.Transforms
             return bitArrays;
         }
 
+        public static unsafe void StretchHistogram(Bitmap bitmap,
+           byte rmin, byte rmax, byte gmin, byte gmax, byte bmin, byte bmax)
+        {
+            var lockRect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            var data = bitmap.LockBits(lockRect, ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+
+            try
+            {
+                var px = (byte*)data.Scan0;
+
+                var mins = new byte[3] { bmin, gmin, rmin };
+                var maxs = new byte[3] { bmax, gmax, rmax };
+
+                px = (byte*)data.Scan0;                
+                for (int y = 0; y < data.Height; y++)
+                {
+                    for (int x = 0; x < data.Width; x++)
+                    {
+                        for (int i = 0; i < 3; i++)
+                        {
+                            var value = *(px + x * 3 + i);
+                            var k = 255D / (maxs[i] - mins[i]);
+                            var b = -k * mins[i];
+                            var v = k * value + b;
+                            var newValue = v > 255 ? (byte)255 : (v < 0 ? (byte)0 : (byte)v);
+                            *(px + x * 3 + i) = newValue;
+                        }
+                    }
+                    px += data.Stride;
+                }
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+        }
+
         private static void PartitionRows(int count, Action<int, int> action)
         {
             const int partitionCount = 1;
