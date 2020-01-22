@@ -150,6 +150,18 @@
   <data name="Dpi_800" xml:space="preserve">
     <value>800 dpi</value>
   </data>
+  <data name="EmailProviderType_CustomSmtp" xml:space="preserve">
+    <value>Custom SMTP</value>
+  </data>
+  <data name="EmailProviderType_Gmail" xml:space="preserve">
+    <value>Gmail</value>
+  </data>
+  <data name="EmailProviderType_OutlookWeb" xml:space="preserve">
+    <value>Outlook Web Access</value>
+  </data>
+  <data name="EmailProvider_NotSelected" xml:space="preserve">
+    <value>No provider selected.</value>
+  </data>
   <data name="HorizontalAlign_Center" xml:space="preserve">
     <value>Center</value>
   </data>
@@ -192,6 +204,21 @@
   <data name="PageSize_Letter" xml:space="preserve">
     <value>US Letter (8.5x11 in)</value>
   </data>
+  <data name="PdfCompat_Default" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="PdfCompat_PdfA1B" xml:space="preserve">
+    <value>PDF/A-1b</value>
+  </data>
+  <data name="PdfCompat_PdfA2B" xml:space="preserve">
+    <value>PDF/A-2b</value>
+  </data>
+  <data name="PdfCompat_PdfA3B" xml:space="preserve">
+    <value>PDF/A-3b</value>
+  </data>
+  <data name="PdfCompat_PdfA3U" xml:space="preserve">
+    <value>PDF/A-3u</value>
+  </data>
   <data name="Scale_1_1" xml:space="preserve">
     <value>1:1</value>
   </data>
@@ -213,16 +240,40 @@
   <data name="Source_Glass" xml:space="preserve">
     <value>Glass</value>
   </data>
+  <data name="TiffComp_Auto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="TiffComp_Ccitt4" xml:space="preserve">
+    <value>CCITT4</value>
+  </data>
+  <data name="TiffComp_Lzw" xml:space="preserve">
+    <value>LZW</value>
+  </data>
+  <data name="TiffComp_None" xml:space="preserve">
+    <value>None</value>
+  </data>
   <data name="TwainImpl_Default" xml:space="preserve">
     <value>Default</value>
   </data>
   <data name="TwainImpl_Legacy" xml:space="preserve">
     <value>Legacy (native UI only)</value>
   </data>
+  <data name="TwainImpl_MemXfer" xml:space="preserve">
+    <value>Alternative Transfer</value>
+  </data>
   <data name="TwainImpl_OldDsm" xml:space="preserve">
     <value>Old DSM</value>
   </data>
   <data name="TwainImpl_X64" xml:space="preserve">
     <value>x64</value>
+  </data>
+  <data name="WiaVersion_Default" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="WiaVersion_Wia10" xml:space="preserve">
+    <value>1.0</value>
+  </data>
+  <data name="WiaVersion_Wia20" xml:space="preserve">
+    <value>2.0</value>
   </data>
 </root>

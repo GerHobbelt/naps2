@@ -7,19 +7,19 @@ namespace NAPS2.ImportExport.Images
 {
     public class ImageSettingsContainer
     {
-        private readonly UserConfigManager userConfigManager;
+        private readonly IUserConfigManager userConfigManager;
 
         private ImageSettings localImageSettings;
 
-        public ImageSettingsContainer(UserConfigManager userConfigManager)
+        public ImageSettingsContainer(IUserConfigManager userConfigManager)
         {
             this.userConfigManager = userConfigManager;
         }
 
         public ImageSettings ImageSettings
         {
-            get { return localImageSettings ?? userConfigManager.Config.ImageSettings ?? new ImageSettings(); }
-            set { localImageSettings = value; }
+            get => localImageSettings ?? userConfigManager.Config.ImageSettings ?? new ImageSettings();
+            set => localImageSettings = value;
         }
     }
 }

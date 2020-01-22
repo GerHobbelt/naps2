@@ -5,7 +5,11 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
+using NAPS2.Logging;
+using NAPS2.Platform;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
 using NAPS2.WinForms;
@@ -21,14 +25,13 @@ namespace NAPS2.Scan.Twain
 
         private readonly IFormFactory formFactory;
         private readonly IBlankDetector blankDetector;
-        private readonly ThumbnailRenderer thumbnailRenderer;
+        private readonly ScannedImageHelper scannedImageHelper;
 
         static TwainWrapper()
         {
-#if STANDALONE
             // Path to the folder containing the 64-bit twaindsm.dll relative to NAPS2.Core.dll
             const string lib64Dir = "64";
-            if (Environment.Is64BitProcess)
+            if (Environment.Is64BitProcess && PlatformCompat.System.CanUseWin32)
             {
                 var location = Assembly.GetExecutingAssembly().Location;
                 var coreDllDir = System.IO.Path.GetDirectoryName(location);
@@ -37,20 +40,31 @@ namespace NAPS2.Scan.Twain
                     Win32.SetDllDirectory(System.IO.Path.Combine(coreDllDir, lib64Dir));
                 }
             }
-#endif
 #if DEBUG
             PlatformInfo.Current.Log.IsDebugEnabled = true;
 #endif
         }
 
-        public TwainWrapper(IFormFactory formFactory, IBlankDetector blankDetector, ThumbnailRenderer thumbnailRenderer)
+        public TwainWrapper(IFormFactory formFactory, IBlankDetector blankDetector, ScannedImageHelper scannedImageHelper)
         {
             this.formFactory = formFactory;
             this.blankDetector = blankDetector;
-            this.thumbnailRenderer = thumbnailRenderer;
+            this.scannedImageHelper = scannedImageHelper;
         }
 
         public List<ScanDevice> GetDeviceList(TwainImpl twainImpl)
+        {
+            var deviceList = InternalGetDeviceList(twainImpl);
+            if (twainImpl == TwainImpl.Default && deviceList.Count == 0)
+            {
+                // Fall back to OldDsm in case of no devices
+                // This is primarily for Citrix support, which requires using twain_32.dll for TWAIN passthrough
+                deviceList = InternalGetDeviceList(TwainImpl.OldDsm);
+            }
+            return deviceList;
+        }
+
+        private static List<ScanDevice> InternalGetDeviceList(TwainImpl twainImpl)
         {
             PlatformInfo.Current.PreferNewDSM = twainImpl != TwainImpl.OldDsm;
             var session = new TwainSession(TwainAppId);
@@ -61,24 +75,59 @@ namespace NAPS2.Scan.Twain
             }
             finally
             {
-                session.Close();
+                try
+                {
+                    session.Close();
+                }
+                catch (Exception e)
+                {
+                    Log.ErrorException("Error closing TWAIN session", e);
+                }
             }
         }
 
-        public List<ScannedImage> Scan(IWin32Window dialogParent, bool activate, ScanDevice scanDevice, ScanProfile scanProfile, ScanParams scanParams)
+        public void Scan(IWin32Window dialogParent, ScanDevice scanDevice, ScanProfile scanProfile, ScanParams scanParams,
+            CancellationToken cancelToken, ScannedImageSource.Concrete source, Action<ScannedImage, ScanParams, string> runBackgroundOcr)
         {
-            if (scanProfile.TwainImpl == TwainImpl.Legacy)
+            try
             {
-                return Legacy.TwainApi.Scan(scanProfile, scanDevice, dialogParent, formFactory);
+                InternalScan(scanProfile.TwainImpl, dialogParent, scanDevice, scanProfile, scanParams, cancelToken, source, runBackgroundOcr);
+            }
+            catch (DeviceNotFoundException)
+            {
+                if (scanProfile.TwainImpl == TwainImpl.Default)
+                {
+                    // Fall back to OldDsm in case of no devices
+                    // This is primarily for Citrix support, which requires using twain_32.dll for TWAIN passthrough
+                    InternalScan(TwainImpl.OldDsm, dialogParent, scanDevice, scanProfile, scanParams, cancelToken, source, runBackgroundOcr);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+        }
+
+        private void InternalScan(TwainImpl twainImpl, IWin32Window dialogParent, ScanDevice scanDevice, ScanProfile scanProfile, ScanParams scanParams,
+            CancellationToken cancelToken, ScannedImageSource.Concrete source, Action<ScannedImage, ScanParams, string> runBackgroundOcr)
+        {
+            if (dialogParent == null)
+            {
+                dialogParent = new BackgroundForm();
+            }
+            if (twainImpl == TwainImpl.Legacy)
+            {
+                Legacy.TwainApi.Scan(scanProfile, scanDevice, dialogParent, formFactory, source);
+                return;
             }
 
-            PlatformInfo.Current.PreferNewDSM = scanProfile.TwainImpl != TwainImpl.OldDsm;
+            PlatformInfo.Current.PreferNewDSM = twainImpl != TwainImpl.OldDsm;
             var session = new TwainSession(TwainAppId);
-            var twainForm = formFactory.Create<FTwainGui>();
-            var images = new List<ScannedImage>();
+            var twainForm = Invoker.Current.InvokeGet(() => scanParams.NoUI ? null : formFactory.Create<FTwainGui>());
             Exception error = null;
             bool cancel = false;
             DataSource ds = null;
+            var waitHandle = new AutoResetEvent(false);
 
             int pageNumber = 0;
 
@@ -92,35 +141,48 @@ namespace NAPS2.Scan.Twain
             };
             session.DataTransferred += (sender, eventArgs) =>
             {
-                Debug.WriteLine("NAPS2.TW - DataTransferred");
-                pageNumber++;
-                using (var output = Image.FromStream(eventArgs.GetNativeImageStream()))
+                try
                 {
-                    using (var result = ScannedImageHelper.PostProcessStep1(output, scanProfile))
+                    Debug.WriteLine("NAPS2.TW - DataTransferred");
+                    pageNumber++;
+                    using (var output = twainImpl == TwainImpl.MemXfer
+                                        ? GetBitmapFromMemXFer(eventArgs.MemoryData, eventArgs.ImageInfo)
+                                        : Image.FromStream(eventArgs.GetNativeImageStream()))
                     {
-                        if (blankDetector.ExcludePage(result, scanProfile))
+                        using (var result = scannedImageHelper.PostProcessStep1(output, scanProfile))
                         {
-                            return;
-                        }
-
-                        var bitDepth = output.PixelFormat == PixelFormat.Format1bppIndexed
-                            ? ScanBitDepth.BlackWhite
-                            : ScanBitDepth.C24Bit;
-                        var image = new ScannedImage(result, bitDepth, scanProfile.MaxQuality, scanProfile.Quality);
-                        image.SetThumbnail(thumbnailRenderer.RenderThumbnail(result));
-                        if (scanParams.DetectPatchCodes)
-                        {
-                            foreach (var patchCodeInfo in eventArgs.GetExtImageInfo(ExtendedImageInfo.PatchCode))
+                            if (blankDetector.ExcludePage(result, scanProfile))
                             {
-                                if (patchCodeInfo.ReturnCode == ReturnCode.Success)
+                                return;
+                            }
+
+                            var bitDepth = output.PixelFormat == PixelFormat.Format1bppIndexed
+                                ? ScanBitDepth.BlackWhite
+                                : ScanBitDepth.C24Bit;
+                            var image = new ScannedImage(result, bitDepth, scanProfile.MaxQuality, scanProfile.Quality);
+                            if (scanParams.DetectPatchCodes)
+                            {
+                                foreach (var patchCodeInfo in eventArgs.GetExtImageInfo(ExtendedImageInfo.PatchCode))
                                 {
-                                    image.PatchCode = GetPatchCode(patchCodeInfo);
+                                    if (patchCodeInfo.ReturnCode == ReturnCode.Success)
+                                    {
+                                        image.PatchCode = GetPatchCode(patchCodeInfo);
+                                    }
                                 }
                             }
+                            scannedImageHelper.PostProcessStep2(image, result, scanProfile, scanParams, pageNumber);
+                            string tempPath = scannedImageHelper.SaveForBackgroundOcr(result, scanParams);
+                            runBackgroundOcr(image, scanParams, tempPath);
+                            source.Put(image);
                         }
-                        ScannedImageHelper.PostProcessStep2(image, result, scanProfile, scanParams, pageNumber);
-                        images.Add(image);
                     }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("NAPS2.TW - DataTransferred - Error");
+                    error = ex;
+                    cancel = true;
+                    StopTwain();
                 }
             };
             session.TransferError += (sender, eventArgs) =>
@@ -140,31 +202,33 @@ namespace NAPS2.Scan.Twain
                     Log.Error("TWAIN Transfer Error. Return code = {0}.", eventArgs.ReturnCode);
                 }
                 cancel = true;
-                twainForm.Close();
+                StopTwain();
             };
             session.SourceDisabled += (sender, eventArgs) =>
             {
                 Debug.WriteLine("NAPS2.TW - SourceDisabled");
-                twainForm.Close();
+                StopTwain();
             };
 
-            twainForm.Shown += (sender, eventArgs) =>
+            void StopTwain()
             {
-                if (activate)
+                waitHandle.Set();
+                if (!scanParams.NoUI)
                 {
-                    // TODO: Set this flag based on whether NAPS2 already has focus
-                    // http://stackoverflow.com/questions/7162834/determine-if-current-application-is-activated-has-focus
-                    // Or maybe http://stackoverflow.com/questions/156046/show-a-form-without-stealing-focus
-                    twainForm.Activate();
+                    Invoker.Current.Invoke(() => twainForm.Close());
                 }
-                Debug.WriteLine("NAPS2.TW - TwainForm.Shown");
+            }
+
+            void InitTwain()
+            {
                 try
                 {
-                    ReturnCode rc = session.Open(new WindowsFormsMessageLoopHook(dialogParent.Handle));
+                    var windowHandle = (Invoker.Current as Form)?.Handle;
+                    ReturnCode rc = windowHandle != null ? session.Open(new WindowsFormsMessageLoopHook(windowHandle.Value)) : session.Open();
                     if (rc != ReturnCode.Success)
                     {
                         Debug.WriteLine("NAPS2.TW - Could not open session - {0}", rc);
-                        twainForm.Close();
+                        StopTwain();
                         return;
                     }
                     ds = session.FirstOrDefault(x => x.Name == scanDevice.ID);
@@ -177,31 +241,60 @@ namespace NAPS2.Scan.Twain
                     if (rc != ReturnCode.Success)
                     {
                         Debug.WriteLine("NAPS2.TW - Could not open DS - {0}", rc);
-                        twainForm.Close();
+                        StopTwain();
                         return;
                     }
                     ConfigureDS(ds, scanProfile, scanParams);
                     var ui = scanProfile.UseNativeUI ? SourceEnableMode.ShowUI : SourceEnableMode.NoUI;
                     Debug.WriteLine("NAPS2.TW - Enabling DS");
-                    rc = ds.Enable(ui, true, twainForm.Handle);
+                    rc = scanParams.NoUI ? ds.Enable(ui, true, windowHandle ?? IntPtr.Zero) : ds.Enable(ui, true, twainForm.Handle);
                     Debug.WriteLine("NAPS2.TW - Enable finished");
                     if (rc != ReturnCode.Success)
                     {
                         Debug.WriteLine("NAPS2.TW - Enable failed - {0}, rc");
-                        twainForm.Close();
+                        StopTwain();
+                    }
+                    else
+                    {
+                        cancelToken.Register(() =>
+                        {
+                            Debug.WriteLine("NAPS2.TW - User Cancel");
+                            cancel = true;
+                            session.ForceStepDown(5);
+                        });
                     }
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine("NAPS2.TW - Error");
                     error = ex;
-                    twainForm.Close();
+                    StopTwain();
                 }
-            };
+            }
 
-            Debug.WriteLine("NAPS2.TW - Showing TwainForm");
-            twainForm.ShowDialog(dialogParent);
-            Debug.WriteLine("NAPS2.TW - TwainForm closed");
+            if (!scanParams.NoUI)
+            {
+                twainForm.Shown += (sender, eventArgs) => { InitTwain(); };
+                twainForm.Closed += (sender, args) => waitHandle.Set();
+            }
+
+            if (scanParams.NoUI)
+            {
+                Debug.WriteLine("NAPS2.TW - Init with no form");
+                Invoker.Current.Invoke(InitTwain);
+            }
+            else if (!scanParams.Modal)
+            {
+                Debug.WriteLine("NAPS2.TW - Init with non-modal form");
+                Invoker.Current.Invoke(() => twainForm.Show(dialogParent));
+            }
+            else
+            {
+                Debug.WriteLine("NAPS2.TW - Init with modal form");
+                Invoker.Current.Invoke(() => twainForm.ShowDialog(dialogParent));
+            }
+            waitHandle.WaitOne();
+            Debug.WriteLine("NAPS2.TW - Operation complete");
 
             if (ds != null && session.IsSourceOpen)
             {
@@ -223,8 +316,56 @@ namespace NAPS2.Scan.Twain
                 }
                 throw new ScanDriverUnknownException(error);
             }
+        }
 
-            return images;
+        private static Bitmap GetBitmapFromMemXFer(byte[] memoryData, TWImageInfo imageInfo)
+        {
+            int bytesPerPixel = memoryData.Length / (imageInfo.ImageWidth * imageInfo.ImageLength);
+            PixelFormat pixelFormat = bytesPerPixel == 0 ? PixelFormat.Format1bppIndexed : PixelFormat.Format24bppRgb;
+            int imageWidth = imageInfo.ImageWidth;
+            int imageHeight = imageInfo.ImageLength;
+            var bitmap = new Bitmap(imageWidth, imageHeight, pixelFormat);
+            var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
+            try
+            {
+                byte[] source = memoryData;
+                if (bytesPerPixel == 1)
+                {
+                    // No 8-bit greyscale format, so we have to transform into 24-bit
+                    int rowWidth = data.Stride;
+                    int originalRowWidth = source.Length / imageHeight;
+                    byte[] source2 = new byte[rowWidth * imageHeight];
+                    for (int row = 0; row < imageHeight; row++)
+                    {
+                        for (int col = 0; col < imageWidth; col++)
+                        {
+                            source2[row * rowWidth + col * 3] = source[row * originalRowWidth + col];
+                            source2[row * rowWidth + col * 3 + 1] = source[row * originalRowWidth + col];
+                            source2[row * rowWidth + col * 3 + 2] = source[row * originalRowWidth + col];
+                        }
+                    }
+                    source = source2;
+                }
+                else if (bytesPerPixel == 3)
+                {
+                    // Colors are provided as BGR, they need to be swapped to RGB
+                    int rowWidth = data.Stride;
+                    for (int row = 0; row < imageHeight; row++)
+                    {
+                        for (int col = 0; col < imageWidth; col++)
+                        {
+                            (source[row * rowWidth + col * 3], source[row * rowWidth + col * 3 + 2]) =
+                                (source[row * rowWidth + col * 3 + 2], source[row * rowWidth + col * 3]);
+                        }
+                    }
+                }
+                Marshal.Copy(source, 0, data.Scan0, source.Length);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+            return bitmap;
         }
 
         private static PatchCode GetPatchCode(TWInfo patchCodeInfo)
@@ -253,6 +394,18 @@ namespace NAPS2.Scan.Twain
             if (scanProfile.UseNativeUI)
             {
                 return;
+            }
+
+            // Transfer Mode
+            if (scanProfile.TwainImpl == TwainImpl.MemXfer)
+            {
+                ds.Capabilities.ICapXferMech.SetValue(XferMech.Memory);
+            }
+
+            // Hide UI for console
+            if (scanParams.NoUI)
+            {
+                ds.Capabilities.CapIndicators.SetValue(BoolType.False);
             }
 
             // Paper Source
@@ -304,8 +457,7 @@ namespace NAPS2.Scan.Twain
                 horizontalOffset = (pageMaxWidth - pageWidth);
 
             ds.Capabilities.ICapUnits.SetValue(Unit.Inches);
-            TWImageLayout imageLayout;
-            ds.DGImage.ImageLayout.Get(out imageLayout);
+            ds.DGImage.ImageLayout.Get(out TWImageLayout imageLayout);
             imageLayout.Frame = new TWFrame
             {
                 Left = horizontalOffset,

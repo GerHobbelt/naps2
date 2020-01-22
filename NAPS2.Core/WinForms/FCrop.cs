@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -27,82 +7,99 @@ using System.Windows.Forms;
 using NAPS2.Scan.Images;
 using NAPS2.Scan.Images.Transforms;
 using NAPS2.Util;
-using Timer = System.Threading.Timer;
 
 namespace NAPS2.WinForms
 {
-    partial class FCrop : FormBase
+    partial class FCrop : ImageForm
     {
-        private readonly ChangeTracker changeTracker;
-        private readonly ThumbnailRenderer thumbnailRenderer;
+        private static CropTransform _lastTransform;
+        private static Size _lastSize;
 
-        private Bitmap workingImage, workingImage2;
-        private bool previewOutOfDate;
-        private bool working;
-        private Timer previewTimer;
+        private Point dragStartCoords;
+        private LayoutManager lm;
 
-        public FCrop(ChangeTracker changeTracker, ThumbnailRenderer thumbnailRenderer)
+        private int originalWidth, originalHeight;
+
+        public FCrop(ChangeTracker changeTracker, ScannedImageRenderer scannedImageRenderer)
+            : base(changeTracker, scannedImageRenderer)
         {
-            this.changeTracker = changeTracker;
-            this.thumbnailRenderer = thumbnailRenderer;
             InitializeComponent();
 
-            CropTransform = new CropTransform();
-        }
-
-        public ScannedImage Image { get; set; }
-
-        public List<ScannedImage> SelectedImages { get; set; }
-
-        public CropTransform CropTransform { get; private set; }
-
-        private bool TransformMultiple
-        {
-            get { return SelectedImages != null && checkboxApplyToSelected.Checked; }
-        }
-
-        private IEnumerable<ScannedImage> ImagesToTransform
-        {
-            get
-            {
-                return TransformMultiple ? SelectedImages : Enumerable.Repeat(Image, 1);
-            }
-        }
-
-        protected override void OnLoad(object sender, EventArgs eventArgs)
-        {
-            if (SelectedImages != null && SelectedImages.Count > 1)
-            {
-                checkboxApplyToSelected.Text = string.Format(checkboxApplyToSelected.Text, SelectedImages.Count);
-            }
-            else
-            {
-                ConditionalControls.Hide(checkboxApplyToSelected, 6);
-            }
-
-            var lm = new LayoutManager(this)
-                .Bind(pictureBox)
-                    .WidthToForm()
-                    .HeightToForm()
+            lm = new LayoutManager(this)
                 .Bind(tbLeft, tbRight)
                     .WidthTo(() => (int)(GetImageWidthRatio() * pictureBox.Width))
                     .LeftTo(() => (int)((1 - GetImageWidthRatio()) * pictureBox.Width / 2))
                 .Bind(tbTop, tbBottom)
                     .HeightTo(() => (int)(GetImageHeightRatio() * pictureBox.Height))
                     .TopTo(() => (int)((1 - GetImageHeightRatio()) * pictureBox.Height / 2))
-                .Bind(tbBottom, btnOK, btnCancel)
-                    .RightToForm()
-                .Bind(tbRight, checkboxApplyToSelected, btnRevert, btnOK, btnCancel)
-                    .BottomToForm()
                 .Activate();
-            Size = new Size(600, 600);
 
-            workingImage = Image.GetImage();
-            workingImage2 = Image.GetImage();
+            originalWidth = originalHeight = 1000;
+        }
+
+        public CropTransform CropTransform { get; private set; }
+
+        protected override IEnumerable<Transform> Transforms => new[] { CropTransform };
+
+        protected override PictureBox PictureBox => pictureBox;
+
+        protected override Bitmap RenderPreview()
+        {
+            var bitmap = new Bitmap(originalWidth, originalHeight);
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.Clear(Color.Transparent);
+                var attrs = new ImageAttributes();
+                attrs.SetColorMatrix(new ColorMatrix { Matrix33 = 0.5f });
+                g.DrawImage(workingImage2,
+                    new Rectangle(0, 0, originalWidth, originalHeight),
+                    0,
+                    0,
+                    originalWidth,
+                    originalHeight,
+                    GraphicsUnit.Pixel,
+                    attrs);
+                var cropBorderRect = new Rectangle(CropTransform.Left, CropTransform.Top,
+                    originalWidth - CropTransform.Left - CropTransform.Right,
+                    originalHeight - CropTransform.Top - CropTransform.Bottom);
+                g.SetClip(cropBorderRect);
+                g.DrawImage(workingImage2, new Rectangle(0, 0, originalWidth, originalHeight));
+                g.ResetClip();
+                g.DrawRectangle(new Pen(Color.Black, 2.0f), cropBorderRect);
+            }
+
+            return bitmap;
+        }
+
+        protected override void InitTransform()
+        {
+            originalWidth = workingImage.Width;
+            originalHeight = workingImage.Height;
+            if (_lastTransform != null && _lastSize == workingImage.Size)
+            {
+                CropTransform = _lastTransform;
+            }
+            else
+            {
+                ResetTransform();
+            }
             UpdateCropBounds();
-            UpdatePreviewBox();
-
             lm.UpdateLayout();
+        }
+
+        protected override void ResetTransform()
+        {
+            CropTransform = new CropTransform
+            {
+                OriginalHeight = originalHeight,
+                OriginalWidth = originalWidth
+            };
+        }
+
+        protected override void TransformSaved()
+        {
+            _lastTransform = CropTransform;
+            _lastSize = workingImage.Size;
         }
 
         private double GetImageWidthRatio()
@@ -111,7 +108,7 @@ namespace NAPS2.WinForms
             {
                 return 1;
             }
-            double imageAspect = workingImage.Width / (double)workingImage.Height;
+            double imageAspect = originalWidth / (double)originalHeight;
             double pboxAspect = pictureBox.Width / (double)pictureBox.Height;
             if (imageAspect > pboxAspect)
             {
@@ -126,7 +123,7 @@ namespace NAPS2.WinForms
             {
                 return 1;
             }
-            double imageAspect = workingImage.Width / (double)workingImage.Height;
+            double imageAspect = originalWidth / (double)originalHeight;
             double pboxAspect = pictureBox.Width / (double)pictureBox.Height;
             if (pboxAspect > imageAspect)
             {
@@ -137,120 +134,26 @@ namespace NAPS2.WinForms
 
         private void UpdateCropBounds()
         {
-            tbLeft.Maximum = tbRight.Maximum = workingImage.Width;
-            tbTop.Maximum = tbBottom.Maximum = workingImage.Height;
+            tbLeft.Maximum = tbRight.Maximum = originalWidth;
+            tbTop.Maximum = tbBottom.Maximum = originalHeight;
 
-            tbLeft.Value = tbTop.Value = 0;
-            tbRight.Value = workingImage.Width;
-            tbTop.Value = workingImage.Height;
+            tbLeft.Value = CropTransform.Left;
+            tbBottom.Value = CropTransform.Bottom;
+            tbRight.Value = originalWidth - CropTransform.Right;
+            tbTop.Value = originalHeight - CropTransform.Top;
         }
 
         private void UpdateTransform()
         {
-            CropTransform.Left = Math.Min(tbLeft.Value, tbRight.Value);
-            CropTransform.Right = workingImage.Width - Math.Max(tbLeft.Value, tbRight.Value);
-            CropTransform.Bottom = Math.Min(tbTop.Value, tbBottom.Value);
-            CropTransform.Top = workingImage.Height - Math.Max(tbTop.Value, tbBottom.Value);
-            UpdatePreviewBox();
-        }
-
-        private void UpdatePreviewBox()
-        {
-            if (previewTimer == null)
+            CropTransform = new CropTransform
             {
-                previewTimer = new Timer((obj) =>
-                {
-                    if (previewOutOfDate && !working)
-                    {
-                        working = true;
-                        previewOutOfDate = false;
-                        var bitmap = new Bitmap(workingImage2.Width, workingImage2.Height);
-                        using (var g = Graphics.FromImage(bitmap))
-                        {
-                            g.Clear(Color.Transparent);
-                            var attrs = new ImageAttributes();
-                            attrs.SetColorMatrix(new ColorMatrix { Matrix33 = 0.5f });
-                            g.DrawImage(workingImage2,
-                                new Rectangle(0, 0, workingImage2.Width, workingImage2.Height),
-                                0,
-                                0,
-                                workingImage2.Width,
-                                workingImage2.Height,
-                                GraphicsUnit.Pixel,
-                                attrs);
-                            var cropBorderRect = new Rectangle(CropTransform.Left, CropTransform.Top,
-                                workingImage2.Width - CropTransform.Left - CropTransform.Right,
-                                workingImage2.Height - CropTransform.Top - CropTransform.Bottom);
-                            g.SetClip(cropBorderRect);
-                            g.DrawImage(workingImage2, new Rectangle(0, 0, workingImage2.Width, workingImage2.Height));
-                            g.ResetClip();
-                            g.DrawRectangle(new Pen(Color.Black, 2.0f), cropBorderRect);
-                        }
-                        Invoke(new MethodInvoker(() =>
-                        {
-                            if (pictureBox.Image != null)
-                            {
-                                pictureBox.Image.Dispose();
-                            }
-                            pictureBox.Image = bitmap;
-                        }));
-                        working = false;
-                    }
-                }, null, 0, 100);
-            }
-            previewOutOfDate = true;
-        }
-
-        private void btnCancel_Click(object sender, EventArgs e)
-        {
-            Close();
-        }
-
-        private void btnOK_Click(object sender, EventArgs e)
-        {
-            if (!CropTransform.IsNull)
-            {
-                if (TransformMultiple)
-                {
-                    // With multiple images, we need to have the transform scaled in case they're different sizes
-                    using (var referenceBitmap = Image.GetImage())
-                    {
-                        foreach (var img in ImagesToTransform)
-                        {
-                            img.AddTransform(ScaleCropTransform(img, referenceBitmap));
-                            img.SetThumbnail(thumbnailRenderer.RenderThumbnail(img));
-                        }
-                    }
-                }
-                else
-                {
-                    Image.AddTransform(CropTransform);
-                    Image.SetThumbnail(thumbnailRenderer.RenderThumbnail(Image));
-                }
-                changeTracker.HasUnsavedChanges = true;
-            }
-            Close();
-        }
-
-        private CropTransform ScaleCropTransform(ScannedImage img, Bitmap referenceBitmap)
-        {
-            using (var bitmap = img.GetImage())
-            {
-                double xScale = bitmap.Width / (double)referenceBitmap.Width,
-                       yScale = bitmap.Height / (double)referenceBitmap.Height;
-                return new CropTransform
-                {
-                    Left = (int)Math.Round(CropTransform.Left * xScale),
-                    Right = (int)Math.Round(CropTransform.Right * xScale),
-                    Top = (int)Math.Round(CropTransform.Top * yScale),
-                    Bottom = (int)Math.Round(CropTransform.Bottom * yScale)
-                };
-            }
-        }
-
-        private void btnRevert_Click(object sender, EventArgs e)
-        {
-            CropTransform = new CropTransform();
+                Left = Math.Min(tbLeft.Value, tbRight.Value),
+                Right = originalWidth - Math.Max(tbLeft.Value, tbRight.Value),
+                Bottom = Math.Min(tbTop.Value, tbBottom.Value),
+                Top = originalHeight - Math.Max(tbTop.Value, tbBottom.Value),
+                OriginalHeight = originalHeight,
+                OriginalWidth = originalWidth
+            };
             UpdatePreviewBox();
         }
 
@@ -274,22 +177,6 @@ namespace NAPS2.WinForms
             UpdateTransform();
         }
 
-        private void FCrop_FormClosed(object sender, FormClosedEventArgs e)
-        {
-            workingImage.Dispose();
-            workingImage2.Dispose();
-            if (pictureBox.Image != null)
-            {
-                pictureBox.Image.Dispose();
-            }
-            if (previewTimer != null)
-            {
-                previewTimer.Dispose();
-            }
-        }
-
-        private Point dragStartCoords;
-
         private void pictureBox_MouseDown(object sender, MouseEventArgs e)
         {
             dragStartCoords = TranslatePboxCoords(e.Location);
@@ -312,13 +199,13 @@ namespace NAPS2.WinForms
                 }
                 if (dragEndCoords.Y > dragStartCoords.Y)
                 {
-                    tbTop.Value = workingImage.Height - dragStartCoords.Y;
-                    tbBottom.Value = workingImage.Height - dragEndCoords.Y;
+                    tbTop.Value = originalHeight - dragStartCoords.Y;
+                    tbBottom.Value = originalHeight - dragEndCoords.Y;
                 }
                 else
                 {
-                    tbTop.Value = workingImage.Height - dragEndCoords.Y;
-                    tbBottom.Value = workingImage.Height - dragStartCoords.Y;
+                    tbTop.Value = originalHeight - dragEndCoords.Y;
+                    tbBottom.Value = originalHeight - dragStartCoords.Y;
                 }
                 UpdateTransform();
             }
@@ -328,7 +215,7 @@ namespace NAPS2.WinForms
         {
             double px = point.X - 1;
             double py = point.Y - 1;
-            double imageAspect = workingImage.Width / (double)workingImage.Height;
+            double imageAspect = originalWidth / (double)originalHeight;
             double pboxWidth = (pictureBox.Width - 2);
             double pboxHeight = (pictureBox.Height - 2);
             double pboxAspect = pboxWidth / pboxHeight;
@@ -344,10 +231,10 @@ namespace NAPS2.WinForms
                 var emptyHeight = ((1 - pboxAspect / imageAspect) / 2 * pboxHeight);
                 py = (imageAspect / pboxAspect * (py - emptyHeight));
             }
-            double x = px / pboxWidth * workingImage.Width;
-            double y = py / pboxHeight * workingImage.Height;
-            x = Math.Max(Math.Min(x, workingImage.Width), 0);
-            y = Math.Max(Math.Min(y, workingImage.Height), 0);
+            double x = px / pboxWidth * originalWidth;
+            double y = py / pboxHeight * originalHeight;
+            x = Math.Max(Math.Min(x, originalWidth), 0);
+            y = Math.Max(Math.Min(y, originalHeight), 0);
             return new Point((int)Math.Round(x), (int)Math.Round(y));
         }
     }

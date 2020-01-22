@@ -1,24 +1,4 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,14 +7,11 @@ namespace NAPS2.Util
 {
     public static class CollectionExtensions
     {
-        public static void RemoveAll(this IList list)
-        {
-            foreach (int i in Enumerable.Range(0, list.Count))
-            {
-                list.RemoveAt(0);
-            }
-        }
-
+        /// <summary>
+        /// Removes multiple elements from the list at the specified indices.
+        /// </summary>
+        /// <param name="list"></param>
+        /// <param name="indices"></param>
         public static void RemoveAll(this IList list, IEnumerable<int> indices)
         {
             int offset = 0;
@@ -44,11 +21,25 @@ namespace NAPS2.Util
             }
         }
 
+        /// <summary>
+        /// Gets an enumerable of elements at the specified indices.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="indices"></param>
+        /// <returns></returns>
         public static IEnumerable<T> ElementsAt<T>(this IList<T> list, IEnumerable<int> indices)
         {
             return indices.Select(i => list[i]);
         }
 
+        /// <summary>
+        /// Gets an enumerable of indices of the specified elements.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="elements"></param>
+        /// <returns></returns>
         public static IEnumerable<int> IndiciesOf<T>(this IList<T> list, IEnumerable<T> elements)
         {
             return elements.Select(list.IndexOf);
@@ -89,6 +80,95 @@ namespace NAPS2.Util
             {
                 dict[key].Add(value);
             }
+        }
+
+        /// <summary>
+        /// Gets the element for the given key, or default(TKey) if none is present.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key)
+        {
+            if (dict.ContainsKey(key))
+            {
+                return dict[key];
+            }
+            return default;
+        }
+
+        /// <summary>
+        /// Gets the element for the given key, or the provided value if none is present.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, TValue defaultValue)
+        {
+            if (dict.ContainsKey(key))
+            {
+                return dict[key];
+            }
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Gets the element for the given key, or the provided value if none is present.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TValue> defaultValue)
+        {
+            if (dict.ContainsKey(key))
+            {
+                return dict[key];
+            }
+            return defaultValue();
+        }
+
+        /// <summary>
+        /// Gets the element for the given key, or sets and returns the provided value if none is present.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static TValue GetOrSet<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, TValue defaultValue)
+        {
+            if (!dict.ContainsKey(key))
+            {
+                dict[key] = defaultValue;
+            }
+            return dict[key];
+        }
+
+        /// <summary>
+        /// Gets the element for the given key, or sets and returns the provided value if none is present.
+        /// </summary>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="dict"></param>
+        /// <param name="key"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static TValue GetOrSet<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TValue> defaultValue)
+        {
+            if (!dict.ContainsKey(key))
+            {
+                dict[key] = defaultValue();
+            }
+            return dict[key];
         }
     }
 }

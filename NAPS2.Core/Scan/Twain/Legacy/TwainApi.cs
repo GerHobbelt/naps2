@@ -1,29 +1,10 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2014  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using NAPS2.Logging;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
@@ -72,10 +53,11 @@ namespace NAPS2.Scan.Twain.Legacy
             return result;
         }
 
-        public static List<ScannedImage> Scan(ScanProfile settings, ScanDevice device, IWin32Window pForm, IFormFactory formFactory)
+        public static void Scan(ScanProfile settings, ScanDevice device, IWin32Window pForm, IFormFactory formFactory, ScannedImageSource.Concrete source)
         {
             var tw = new Twain();
-            if (!tw.Init(pForm.Handle))
+            var windowHandle = (Invoker.Current as Form)?.Handle ?? pForm.Handle;
+            if (!tw.Init(windowHandle))
             {
                 throw new DeviceNotFoundException();
             }
@@ -83,10 +65,13 @@ namespace NAPS2.Scan.Twain.Legacy
             {
                 throw new DeviceNotFoundException();
             }
-            var form = formFactory.Create<FTwainGui>();
+            var form = Invoker.Current.InvokeGet(formFactory.Create<FTwainGui>);
             var mf = new TwainMessageFilter(settings, tw, form);
-            form.ShowDialog(pForm);
-            return mf.Bitmaps;
+            Invoker.Current.Invoke(() => form.ShowDialog(pForm));
+            foreach (var b in mf.Bitmaps)
+            {
+                source.Put(b);
+            }
         }
 
         private class TwainMessageFilter : IMessageFilter
@@ -107,7 +92,7 @@ namespace NAPS2.Scan.Twain.Legacy
                 form.Activated += FTwainGui_Activated;
             }
 
-            public List<ScannedImage> Bitmaps { get; private set; }
+            public List<ScannedImage> Bitmaps { get; }
 
             public bool PreFilterMessage(ref Message m)
             {

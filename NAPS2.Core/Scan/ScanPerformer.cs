@@ -1,35 +1,23 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using NAPS2.Config;
 using NAPS2.ImportExport;
+using NAPS2.Lang.Resources;
+using NAPS2.Logging;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
 
 namespace NAPS2.Scan
 {
+    /// <summary>
+    /// A high-level interface used for scanning.
+    /// This abstracts away the logic of obtaining and using an instance of IScanDriver.
+    /// </summary>
     public class ScanPerformer : IScanPerformer
     {
         private readonly IScanDriverFactory driverFactory;
@@ -37,22 +25,26 @@ namespace NAPS2.Scan
         private readonly IAutoSave autoSave;
         private readonly AppConfigManager appConfigManager;
         private readonly IProfileManager profileManager;
+        private readonly ScannedImageHelper scannedImageHelper;
 
-        public ScanPerformer(IScanDriverFactory driverFactory, IErrorOutput errorOutput, IAutoSave autoSave, AppConfigManager appConfigManager, IProfileManager profileManager)
+        public ScanPerformer(IScanDriverFactory driverFactory, IErrorOutput errorOutput, IAutoSave autoSave, AppConfigManager appConfigManager, IProfileManager profileManager, ScannedImageHelper scannedImageHelper)
         {
             this.driverFactory = driverFactory;
             this.errorOutput = errorOutput;
             this.autoSave = autoSave;
             this.appConfigManager = appConfigManager;
             this.profileManager = profileManager;
+            this.scannedImageHelper = scannedImageHelper;
         }
 
-        public void PerformScan(ScanProfile scanProfile, ScanParams scanParams, IWin32Window dialogParent, ISaveNotify notify, Action<ScannedImage> imageCallback)
+        public async Task PerformScan(ScanProfile scanProfile, ScanParams scanParams, IWin32Window dialogParent, ISaveNotify notify,
+            Action<ScannedImage> imageCallback, CancellationToken cancelToken = default)
         {
             var driver = driverFactory.Create(scanProfile.DriverName);
             driver.DialogParent = dialogParent;
             driver.ScanProfile = scanProfile;
             driver.ScanParams = scanParams;
+            driver.CancelToken = cancelToken;
             try
             {
                 if (scanProfile.Device == null)
@@ -77,14 +69,18 @@ namespace NAPS2.Scan
                     driver.ScanDevice = scanProfile.Device;
                 }
 
+                // Start the scan
+                int imageCount = 0;
+                var source = driver.Scan().Then(img => imageCount++);
+
                 bool doAutoSave = !scanParams.NoAutoSave && !appConfigManager.Config.DisableAutoSave && scanProfile.EnableAutoSave && scanProfile.AutoSaveSettings != null;
                 if (doAutoSave)
                 {
                     if (scanProfile.AutoSaveSettings.ClearImagesAfterSaving)
                     {
                         // Auto save without piping images
-                        var images = driver.Scan().ToList();
-                        if (autoSave.Save(scanProfile.AutoSaveSettings, images, notify))
+                        var images = await source.ToList();
+                        if (await autoSave.Save(scanProfile.AutoSaveSettings, images, notify))
                         {
                             foreach (ScannedImage img in images)
                             {
@@ -104,21 +100,30 @@ namespace NAPS2.Scan
                     {
                         // Basic auto save, so keep track of images as we pipe them and try to auto save afterwards
                         var images = new List<ScannedImage>();
-                        foreach (ScannedImage scannedImage in driver.Scan())
+                        await source.ForEach(scannedImage =>
                         {
                             imageCallback(scannedImage);
                             images.Add(scannedImage);
-                        }
-                        autoSave.Save(scanProfile.AutoSaveSettings, images, notify);
+                        });
+                        await autoSave.Save(scanProfile.AutoSaveSettings, images, notify);
                     }
                 }
                 else
                 {
                     // No auto save, so just pipe images back as we get them
-                    foreach (ScannedImage scannedImage in driver.Scan())
+                    await source.ForEach(imageCallback);
+                }
+
+                if (imageCount > 0)
+                {
+                    Log.Event(EventType.Scan, new Event
                     {
-                        imageCallback(scannedImage);
-                    }
+                        Name = MiscResources.Scan,
+                        Pages = imageCount,
+                        DeviceName = scanProfile.Device?.Name,
+                        ProfileName = scanProfile.DisplayName,
+                        BitDepth = scanProfile.BitDepth.Description()
+                    });
                 }
             }
             catch (ScanDriverException e)

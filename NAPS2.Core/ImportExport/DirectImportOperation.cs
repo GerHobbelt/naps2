@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Threading;
-using NAPS2.Config;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
 using NAPS2.Operation;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
@@ -15,17 +14,13 @@ namespace NAPS2.ImportExport
     public class DirectImportOperation : OperationBase
     {
         private readonly ThumbnailRenderer thumbnailRenderer;
-        private readonly ThreadFactory threadFactory;
 
-        private bool cancel;
-        private Thread thread;
-
-        public DirectImportOperation(ThumbnailRenderer thumbnailRenderer, ThreadFactory threadFactory)
+        public DirectImportOperation(ThumbnailRenderer thumbnailRenderer)
         {
             this.thumbnailRenderer = thumbnailRenderer;
-            this.threadFactory = threadFactory;
 
             AllowCancel = true;
+            AllowBackground = true;
         }
 
         public bool Start(DirectImageTransfer data, bool copy, Action<ScannedImage> imageCallback)
@@ -36,9 +31,8 @@ namespace NAPS2.ImportExport
                 StatusText = copy ? MiscResources.Copying : MiscResources.Importing,
                 MaxProgress = data.ImageRecovery.Length
             };
-            cancel = false;
 
-            thread = threadFactory.StartThread(() =>
+            RunAsync(async () =>
             {
                 Exception error = null;
                 foreach (var ir in data.ImageRecovery)
@@ -54,12 +48,13 @@ namespace NAPS2.ImportExport
                         {
                             img.AddTransform(transform);
                         }
-                        img.SetThumbnail(thumbnailRenderer.RenderThumbnail(img));
+                        // TODO: Don't bother, here, in recovery, etc.
+                        img.SetThumbnail(await thumbnailRenderer.RenderThumbnail(img));
                         imageCallback(img);
 
                         Status.CurrentProgress++;
                         InvokeStatusChanged();
-                        if (cancel)
+                        if (CancelToken.IsCancellationRequested)
                         {
                             break;
                         }
@@ -73,20 +68,9 @@ namespace NAPS2.ImportExport
                 {
                     Log.ErrorException(string.Format(MiscResources.ImportErrorCouldNot, data.RecoveryFolder), error);
                 }
-                Status.Success = true;
-                InvokeFinished();
+                return true;
             });
             return true;
-        }
-
-        public void WaitUntilFinished()
-        {
-            thread.Join();
-        }
-
-        public override void Cancel()
-        {
-            cancel = true;
         }
     }
 }

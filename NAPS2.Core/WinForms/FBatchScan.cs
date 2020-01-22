@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -29,11 +9,11 @@ using System.Windows.Forms;
 using NAPS2.Config;
 using NAPS2.ImportExport;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
 using NAPS2.Scan;
 using NAPS2.Scan.Batch;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
-using NAPS2.Scan.Twain;
 using NAPS2.Util;
 
 namespace NAPS2.WinForms
@@ -44,28 +24,21 @@ namespace NAPS2.WinForms
 
         private readonly IProfileManager profileManager;
         private readonly AppConfigManager appConfigManager;
-        private readonly IconButtonSizer iconButtonSizer;
-        private readonly IScanPerformer scanPerformer;
         private readonly IUserConfigManager userConfigManager;
         private readonly BatchScanPerformer batchScanPerformer;
         private readonly IErrorOutput errorOutput;
-        private readonly ThreadFactory threadFactory;
         private readonly DialogHelper dialogHelper;
 
-        private bool batchRunning = false;
-        private bool cancelBatch = false;
-        private Thread batchThread;
+        private bool batchRunning;
+        private CancellationTokenSource cts = new CancellationTokenSource();
 
-        public FBatchScan(IProfileManager profileManager, AppConfigManager appConfigManager, IconButtonSizer iconButtonSizer, IScanPerformer scanPerformer, IUserConfigManager userConfigManager, BatchScanPerformer batchScanPerformer, IErrorOutput errorOutput, ThreadFactory threadFactory, DialogHelper dialogHelper)
+        public FBatchScan(IProfileManager profileManager, AppConfigManager appConfigManager, IUserConfigManager userConfigManager, BatchScanPerformer batchScanPerformer, IErrorOutput errorOutput, DialogHelper dialogHelper)
         {
             this.profileManager = profileManager;
             this.appConfigManager = appConfigManager;
-            this.iconButtonSizer = iconButtonSizer;
-            this.scanPerformer = scanPerformer;
             this.userConfigManager = userConfigManager;
             this.batchScanPerformer = batchScanPerformer;
             this.errorOutput = errorOutput;
-            this.threadFactory = threadFactory;
             this.dialogHelper = dialogHelper;
             InitializeComponent();
 
@@ -135,8 +108,7 @@ namespace NAPS2.WinForms
 
             if (rdMultipleScansDelay.Checked)
             {
-                int scanCount;
-                if (!int.TryParse(txtNumberOfScans.Text, out scanCount) || scanCount <= 0)
+                if (!int.TryParse(txtNumberOfScans.Text, out int scanCount) || scanCount <= 0)
                 {
                     ok = false;
                     scanCount = 0;
@@ -144,8 +116,7 @@ namespace NAPS2.WinForms
                 }
                 BatchSettings.ScanCount = scanCount;
 
-                double scanInterval;
-                if (!double.TryParse(txtTimeBetweenScans.Text, out scanInterval) || scanInterval < 0)
+                if (!double.TryParse(txtTimeBetweenScans.Text, out double scanInterval) || scanInterval < 0)
                 {
                     ok = false;
                     scanInterval = 0;
@@ -222,8 +193,7 @@ namespace NAPS2.WinForms
 
         private void btnChooseFolder_Click(object sender, EventArgs e)
         {
-            string savePath;
-            if (dialogHelper.PromptToSavePdfOrImage(null, out savePath))
+            if (dialogHelper.PromptToSavePdfOrImage(null, out string savePath))
             {
                 txtFilePath.Text = savePath;
             }
@@ -286,7 +256,7 @@ namespace NAPS2.WinForms
 
             // Update state
             batchRunning = true;
-            cancelBatch = false;
+            cts = new CancellationTokenSource();
 
             // Update UI
             btnStart.Enabled = false;
@@ -295,8 +265,7 @@ namespace NAPS2.WinForms
             EnableDisableSettings(false);
 
             // Start the batch
-            batchThread = threadFactory.CreateThread(DoBatchScan);
-            batchThread.Start();
+            DoBatchScan().AssertNoAwait();
 
             // Save settings for next time (could also do on form close)
             userConfigManager.Config.LastBatchSettings = BatchSettings;
@@ -324,15 +293,15 @@ namespace NAPS2.WinForms
             }
         }
 
-        private void DoBatchScan()
+        private async Task DoBatchScan()
         {
             try
             {
-                batchScanPerformer.PerformBatchScan(BatchSettings, this,
-                    image => Invoke(() => ImageCallback(image)), ProgressCallback());
-                Invoke(() =>
+                await batchScanPerformer.PerformBatchScan(BatchSettings, this,
+                    image => SafeInvoke(() => ImageCallback(image)), ProgressCallback, cts.Token);
+                SafeInvoke(() =>
                 {
-                    lblStatus.Text = cancelBatch
+                    lblStatus.Text = cts.IsCancellationRequested
                         ? MiscResources.BatchStatusCancelled
                         : MiscResources.BatchStatusComplete;
                 });
@@ -353,15 +322,15 @@ namespace NAPS2.WinForms
             {
                 Log.ErrorException("Error in batch scan", ex);
                 errorOutput.DisplayError(MiscResources.BatchError, ex);
-                Invoke(() =>
+                SafeInvoke(() =>
                 {
                     lblStatus.Text = MiscResources.BatchStatusError;
                 });
             }
-            Invoke(() =>
+            SafeInvoke(() =>
             {
                 batchRunning = false;
-                cancelBatch = false;
+                cts = new CancellationTokenSource();
                 btnStart.Enabled = true;
                 btnCancel.Enabled = true;
                 btnCancel.Text = MiscResources.Close;
@@ -370,28 +339,24 @@ namespace NAPS2.WinForms
             });
         }
 
-        private Func<string, bool> ProgressCallback()
+        private void ProgressCallback(string status)
         {
-            return status =>
+            SafeInvoke(() =>
             {
-                if (!cancelBatch)
-                {
-                    Invoke(() =>
-                    {
-                        lblStatus.Text = status;
-                    });
-                }
-                return !cancelBatch;
-            };
+                lblStatus.Text = status;
+            });
         }
 
         private void btnCancel_Click(object sender, EventArgs e)
         {
             if (batchRunning)
             {
-                cancelBatch = true;
-                btnCancel.Enabled = false;
-                lblStatus.Text = MiscResources.BatchStatusCancelling;
+                if (MessageBox.Show(MiscResources.ConfirmCancelBatch, MiscResources.CancelBatch, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    cts.Cancel();
+                    btnCancel.Enabled = false;
+                    lblStatus.Text = MiscResources.BatchStatusCancelling;
+                }
             }
             else
             {
@@ -401,7 +366,7 @@ namespace NAPS2.WinForms
 
         private void FBatchScan_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (cancelBatch)
+            if (cts.IsCancellationRequested)
             {
                 // Keep dialog open while cancel is in progress to avoid concurrency issues
                 e.Cancel = true;

@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using NAPS2.Config;
+using NAPS2.Operation;
+using NAPS2.Update;
 using NAPS2.Util;
 
 namespace NAPS2.WinForms
@@ -14,16 +15,24 @@ namespace NAPS2.WinForms
         private const int PADDING_X = 25, PADDING_Y = 25;
         private const int SPACING_Y = 20;
 
-        private readonly FormBase parentForm;
         private readonly AppConfigManager appConfigManager;
 
-        private readonly List<NotifyWidget> slots = new List<NotifyWidget>();
+        private readonly List<NotifyWidgetBase> slots = new List<NotifyWidgetBase>();
+        private FormBase parentForm;
 
-        public NotificationManager(FormBase parentForm, AppConfigManager appConfigManager)
+        public NotificationManager(AppConfigManager appConfigManager)
         {
-            this.parentForm = parentForm;
             this.appConfigManager = appConfigManager;
-            parentForm.Resize += parentForm_Resize;
+        }
+
+        public FormBase ParentForm
+        {
+            get => parentForm;
+            set
+            {
+                parentForm = value;
+                parentForm.Resize += parentForm_Resize;
+            }
         }
 
         public void PdfSaved(string path)
@@ -43,15 +52,44 @@ namespace NAPS2.WinForms
             }
         }
 
-        private void Show(NotifyWidget n)
+        public void DonatePrompt()
         {
-            if (appConfigManager.Config.DisableSaveNotifications)
+            Show(new DonatePromptNotifyWidget());
+        }
+
+        public void OperationProgress(IOperationProgress opModalProgress, IOperation op)
+        {
+            Show(new OperationProgressNotifyWidget(opModalProgress, op));
+        }
+
+        public void UpdateAvailable(UpdateChecker updateChecker, UpdateInfo update)
+        {
+            Show(new UpdateAvailableNotifyWidget(updateChecker, update));
+        }
+
+        public void Rebuild()
+        {
+            var old = slots.ToList();
+            slots.Clear();
+            for (int i = 0; i < old.Count; i++)
+            {
+                if (old[i] != null)
+                {
+                    Show(old[i].Clone());
+                }
+            }
+        }
+
+        private void Show(NotifyWidgetBase n)
+        {
+            if (appConfigManager.Config.DisableSaveNotifications && n is NotifyWidget)
             {
                 return;
             }
 
             int slot = FillNextSlot(n);
             n.Location = GetPosition(n, slot);
+            n.Resize += parentForm_Resize;
             n.BringToFront();
             n.HideNotify += (sender, args) => ClearSlot(n);
             n.ShowNotify();
@@ -68,7 +106,7 @@ namespace NAPS2.WinForms
             }
         }
 
-        private void ClearSlot(NotifyWidget n)
+        private void ClearSlot(NotifyWidgetBase n)
         {
             var index = slots.IndexOf(n);
             if (index != -1)
@@ -78,7 +116,7 @@ namespace NAPS2.WinForms
             }
         }
 
-        private int FillNextSlot(NotifyWidget n)
+        private int FillNextSlot(NotifyWidgetBase n)
         {
             var index = slots.IndexOf(null);
             if (index == -1)
@@ -94,7 +132,7 @@ namespace NAPS2.WinForms
             return index;
         }
 
-        private Point GetPosition(NotifyWidget n, int slot)
+        private Point GetPosition(NotifyWidgetBase n, int slot)
         {
             return new Point(parentForm.ClientSize.Width - n.Width - PADDING_X,
                 parentForm.ClientSize.Height - n.Height - PADDING_Y - (n.Height + SPACING_Y) * slot);

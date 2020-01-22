@@ -5,6 +5,10 @@ using System.Runtime.InteropServices;
 
 namespace NAPS2.Util
 {
+    /// <summary>
+    /// Base class for implicitly converting structures to unmanaged objects addressed by IntPtr.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
     public abstract class UnmanagedBase<T> : IDisposable
     {
         private bool disposed;
@@ -22,13 +26,7 @@ namespace NAPS2.Util
         /// <summary>
         /// Gets a value indicated whether the unmanaged structure is null.
         /// </summary>
-        public bool IsNull
-        {
-            get
-            {
-                return Pointer == IntPtr.Zero;
-            }
-        }
+        public bool IsNull => Pointer == IntPtr.Zero;
 
         /// <summary>
         /// Gets a pointer to the unmanaged structure. If the provided value was null, this is IntPtr.Zero.
@@ -64,9 +62,6 @@ namespace NAPS2.Util
 
         protected abstract void DestroyStructures();
 
-        public static implicit operator IntPtr(UnmanagedBase<T> unmanaged)
-        {
-            return unmanaged.Pointer;
-        }
+        public static implicit operator IntPtr(UnmanagedBase<T> unmanaged) => unmanaged.Pointer;
     }
 }

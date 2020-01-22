@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using NAPS2.Util;
 
 namespace NAPS2.Scan.Images.Transforms
 {
@@ -18,6 +19,12 @@ namespace NAPS2.Scan.Images.Transforms
                 mod += 360.0;
             }
             return mod;
+        }
+
+        public static RotationTransform Auto(Bitmap bitmap)
+        {
+            var deskewer = new HoughLineDeskewer();
+            return new RotationTransform(-deskewer.GetSkewAngle(bitmap));
         }
 
         private double angle;
@@ -54,8 +61,8 @@ namespace NAPS2.Scan.Images.Transforms
 
         public double Angle
         {
-            get { return angle; }
-            set { angle = NormalizeAngle(value); }
+            get => angle;
+            set => angle = NormalizeAngle(value);
         }
 
         public override Bitmap Perform(Bitmap bitmap)
@@ -83,12 +90,12 @@ namespace NAPS2.Scan.Images.Transforms
             if (Angle > 45.0 && Angle < 135.0 || Angle > 225.0 && Angle < 315.0)
             {
                 result = new Bitmap(bitmap.Height, bitmap.Width);
-                result.SetResolution(bitmap.VerticalResolution, bitmap.HorizontalResolution);
+                result.SafeSetResolution(bitmap.VerticalResolution, bitmap.HorizontalResolution);
             }
             else
             {
                 result = new Bitmap(bitmap.Width, bitmap.Height);
-                result.SetResolution(bitmap.HorizontalResolution, bitmap.VerticalResolution);
+                result.SafeSetResolution(bitmap.HorizontalResolution, bitmap.VerticalResolution);
             }
             using (var g = Graphics.FromImage(result))
             {
@@ -103,10 +110,7 @@ namespace NAPS2.Scan.Images.Transforms
             return result;
         }
 
-        public override bool CanSimplify(Transform other)
-        {
-            return other is RotationTransform;
-        }
+        public override bool CanSimplify(Transform other) => other is RotationTransform;
 
         public override Transform Simplify(Transform other)
         {
@@ -114,9 +118,6 @@ namespace NAPS2.Scan.Images.Transforms
             return new RotationTransform(Angle + other2.Angle);
         }
 
-        public override bool IsNull
-        {
-            get { return Math.Abs(Angle - 0.0) < TOLERANCE; }
-        }
+        public override bool IsNull => Math.Abs(Angle - 0.0) < TOLERANCE;
     }
 }

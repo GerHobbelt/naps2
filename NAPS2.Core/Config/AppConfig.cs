@@ -1,27 +1,10 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using NAPS2.ImportExport.Pdf;
+using NAPS2.Logging;
+using NAPS2.Ocr;
 using NAPS2.Scan;
 
 namespace NAPS2.Config
@@ -44,9 +27,19 @@ namespace NAPS2.Config
 
         public SaveButtonDefaultAction SaveButtonDefaultAction { get; set; }
 
+        public bool HideOcrButton { get; set; }
+
+        public bool HideImportButton { get; set; }
+
+        public bool HideSavePdfButton { get; set; }
+
+        public bool HideSaveImagesButton { get; set; }
+
         public bool HideEmailButton { get; set; }
 
         public bool HidePrintButton { get; set; }
+
+        public bool HideDonateButton { get; set; }
 
         public bool DisableAutoSave { get; set; }
 
@@ -57,6 +50,8 @@ namespace NAPS2.Config
         public bool NoUserProfiles { get; set; }
 
         public bool AlwaysRememberDevice { get; set; }
+
+        public bool DisableGenericPdfImport { get; set; }
 
         public bool NoUpdatePrompt { get; set; }
 
@@ -69,6 +64,18 @@ namespace NAPS2.Config
         public string ComponentsPath { get; set; }
 
         public double OcrTimeoutInSeconds { get; set; }
+
+        public OcrState OcrState { get; set; }
+        
+        public string OcrDefaultLanguage { get; set; }
+
+        public OcrMode OcrDefaultMode { get; set; }
+
+        public bool OcrDefaultAfterScanning { get; set; }
+
+        public PdfCompat ForcePdfCompat { get; set; } 
+
+        public EventType EventLogging { get; set; }
 
         public KeyboardShortcuts KeyboardShortcuts { get; set; }
     }

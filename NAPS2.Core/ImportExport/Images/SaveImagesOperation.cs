@@ -1,24 +1,4 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -26,8 +6,10 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
 using NAPS2.Operation;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
@@ -39,20 +21,20 @@ namespace NAPS2.ImportExport.Images
         private readonly FileNamePlaceholders fileNamePlaceholders;
         private readonly ImageSettingsContainer imageSettingsContainer;
         private readonly IOverwritePrompt overwritePrompt;
-        private readonly ThreadFactory threadFactory;
+        private readonly ScannedImageRenderer scannedImageRenderer;
+        private readonly TiffHelper tiffHelper;
 
-        private bool cancel;
-        private Thread thread;
-
-        public SaveImagesOperation(FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, IOverwritePrompt overwritePrompt, ThreadFactory threadFactory)
+        public SaveImagesOperation(FileNamePlaceholders fileNamePlaceholders, ImageSettingsContainer imageSettingsContainer, IOverwritePrompt overwritePrompt, ScannedImageRenderer scannedImageRenderer, TiffHelper tiffHelper)
         {
             this.fileNamePlaceholders = fileNamePlaceholders;
             this.imageSettingsContainer = imageSettingsContainer;
             this.overwritePrompt = overwritePrompt;
-            this.threadFactory = threadFactory;
+            this.scannedImageRenderer = scannedImageRenderer;
+            this.tiffHelper = tiffHelper;
 
             ProgressTitle = MiscResources.SaveImagesProgress;
             AllowCancel = true;
+            AllowBackground = true;
         }
 
         public string FirstFileSaved { get; private set; }
@@ -71,9 +53,9 @@ namespace NAPS2.ImportExport.Images
             {
                 MaxProgress = images.Count
             };
-            cancel = false;
 
-            thread = threadFactory.StartThread(() =>
+            var snapshots = images.Select(x => x.Preserve()).ToList();
+            RunAsync(async () =>
             {
                 try
                 {
@@ -86,38 +68,32 @@ namespace NAPS2.ImportExport.Images
                     }
                     ImageFormat format = GetImageFormat(subFileName);
 
-                    if (Equals(format, ImageFormat.Tiff))
+                    if (Equals(format, ImageFormat.Tiff) && !imageSettingsContainer.ImageSettings.SinglePageTiff)
                     {
                         if (File.Exists(subFileName))
                         {
                             if (overwritePrompt.ConfirmOverwrite(subFileName) != DialogResult.Yes)
                             {
-                                return;
+                                return false;
                             }
                         }
                         Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(subFileName));
-                        Status.Success = TiffHelper.SaveMultipage(images, subFileName, j =>
-                        {
-                            Status.CurrentProgress = j;
-                            InvokeStatusChanged();
-                            return !cancel;
-                        });
                         FirstFileSaved = subFileName;
-                        return;
+                        return await tiffHelper.SaveMultipage(snapshots, subFileName, imageSettingsContainer.ImageSettings.TiffCompression, OnProgress, CancelToken);
                     }
 
                     int i = 0;
-                    int digits = (int) Math.Floor(Math.Log10(images.Count)) + 1;
-                    foreach (ScannedImage img in images)
+                    int digits = (int)Math.Floor(Math.Log10(snapshots.Count)) + 1;
+                    foreach (ScannedImage.Snapshot snapshot in snapshots)
                     {
-                        if (cancel)
+                        if (CancelToken.IsCancellationRequested)
                         {
-                            return;
+                            return false;
                         }
                         Status.CurrentProgress = i;
                         InvokeStatusChanged();
 
-                        if (images.Count == 1 && File.Exists(subFileName))
+                        if (snapshots.Count == 1 && File.Exists(subFileName))
                         {
                             var dialogResult = overwritePrompt.ConfirmOverwrite(subFileName);
                             if (dialogResult == DialogResult.No)
@@ -126,36 +102,33 @@ namespace NAPS2.ImportExport.Images
                             }
                             if (dialogResult == DialogResult.Cancel)
                             {
-                                return;
+                                return false;
                             }
                         }
-                        using (Bitmap baseImage = img.GetImage())
+                        if (snapshots.Count == 1)
                         {
-                            if (images.Count == 1)
-                            {
-                                Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(subFileName));
-                                InvokeStatusChanged();
-                                DoSaveImage(baseImage, subFileName, format);
-                                FirstFileSaved = subFileName;
-                            }
-                            else
-                            {
-                                var fileNameN = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime, true, i,
-                                    digits);
-                                Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(fileNameN));
-                                InvokeStatusChanged();
-                                DoSaveImage(baseImage, fileNameN, format);
+                            Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(subFileName));
+                            InvokeStatusChanged();
+                            await DoSaveImage(snapshot, subFileName, format);
+                            FirstFileSaved = subFileName;
+                        }
+                        else
+                        {
+                            var fileNameN = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime, true, i,
+                                digits);
+                            Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(fileNameN));
+                            InvokeStatusChanged();
+                            await DoSaveImage(snapshot, fileNameN, format);
 
-                                if (i == 0)
-                                {
-                                    FirstFileSaved = fileNameN;
-                                }
+                            if (i == 0)
+                            {
+                                FirstFileSaved = fileNameN;
                             }
                         }
                         i++;
                     }
 
-                    Status.Success = FirstFileSaved != null;
+                    return FirstFileSaved != null;
                 }
                 catch (UnauthorizedAccessException ex)
                 {
@@ -168,42 +141,51 @@ namespace NAPS2.ImportExport.Images
                 }
                 finally
                 {
+                    snapshots.ForEach(s => s.Dispose());
                     GC.Collect();
-                    InvokeFinished();
                 }
+                return false;
             });
+            Success.ContinueWith(task =>
+            {
+                if (task.Result)
+                {
+                    Log.Event(EventType.SaveImages, new Event
+                    {
+                        Name = MiscResources.SaveImages,
+                        Pages = snapshots.Count,
+                        FileFormat = Path.GetExtension(fileName)
+                    });
+                }
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
 
             return true;
         }
 
-        private void DoSaveImage(Bitmap image, string path, ImageFormat format)
+        private async Task DoSaveImage(ScannedImage.Snapshot snapshot, string path, ImageFormat format)
         {
             PathHelper.EnsureParentDirExists(path);
-            if (Equals(format, ImageFormat.Jpeg))
+            if (Equals(format, ImageFormat.Tiff))
+            {
+                await tiffHelper.SaveMultipage(new List<ScannedImage.Snapshot> { snapshot }, path, imageSettingsContainer.ImageSettings.TiffCompression, (i, j) => { }, CancellationToken.None);
+            }
+            else if (Equals(format, ImageFormat.Jpeg))
             {
                 var quality = Math.Max(Math.Min(imageSettingsContainer.ImageSettings.JpegQuality, 100), 0);
                 var encoder = ImageCodecInfo.GetImageEncoders().First(x => x.FormatID == ImageFormat.Jpeg.Guid);
                 var encoderParams = new EncoderParameters(1);
                 encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, quality);
-                image.Save(path, encoder, encoderParams);
+                using (Bitmap bitmap = await scannedImageRenderer.Render(snapshot))
+                {
+                    bitmap.Save(path, encoder, encoderParams);
+                }
             }
             else
             {
-                image.Save(path, format);
-            }
-        }
-
-        public override void Cancel()
-        {
-            cancel = true;
-        }
-
-        public void WaitUntilFinished(bool throwOnError = true)
-        {
-            thread.Join();
-            if (throwOnError && LastError != null)
-            {
-                throw new Exception(LastError.ErrorMessage, LastError.Exception);
+                using (Bitmap bitmap = await scannedImageRenderer.Render(snapshot))
+                {
+                    bitmap.Save(path, format);
+                }
             }
         }
 

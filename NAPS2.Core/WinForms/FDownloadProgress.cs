@@ -6,7 +6,9 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Windows.Forms;
+using NAPS2.Dependencies;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
 using NAPS2.Util;
 
 namespace NAPS2.WinForms
@@ -15,12 +17,25 @@ namespace NAPS2.WinForms
     {
         private readonly List<QueueItem> filesToDownload = new List<QueueItem>();
         private int filesDownloaded = 0;
+        private int urlIndex = 0;
         private double currentFileSize = 0.0;
         private double currentFileProgress = 0.0;
         private bool hasError;
         private bool cancel;
 
         private readonly WebClient client = new WebClient();
+
+        static FDownloadProgress()
+        {
+            try
+            {
+                const int tls12 = 3072;
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType) tls12;
+            }
+            catch (NotSupportedException)
+            {
+            }
+        }
 
         public FDownloadProgress()
         {
@@ -96,14 +111,19 @@ namespace NAPS2.WinForms
             {
                 var prev = filesToDownload[filesDownloaded];
                 Directory.Delete(prev.TempFolder, true);
-                if (!cancel)
+                if (cancel)
                 {
-                    Close();
-                    MessageBox.Show(MiscResources.FilesCouldNotBeDownloaded, MiscResources.DownloadError, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
-                return;
+                // Retry if possible
+                urlIndex++;
+                hasError = false;
             }
-            if (filesDownloaded > 0)
+            else
+            {
+                urlIndex = 0;
+            }
+            if (filesDownloaded > 0 && urlIndex == 0)
             {
                 var prev = filesToDownload[filesDownloaded - 1];
                 var filePath = Path.Combine(prev.TempFolder, prev.DownloadInfo.FileName);
@@ -124,15 +144,26 @@ namespace NAPS2.WinForms
                 Close();
                 return;
             }
+            if (urlIndex >= filesToDownload[filesDownloaded].DownloadInfo.Urls.Count)
+            {
+                Close();
+                MessageBox.Show(MiscResources.FilesCouldNotBeDownloaded, MiscResources.DownloadError, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             var next = filesToDownload[filesDownloaded];
             next.TempFolder = Path.Combine(Paths.Temp, Path.GetRandomFileName());
             Directory.CreateDirectory(next.TempFolder);
-            client.DownloadFileAsync(new Uri(next.DownloadInfo.Url), Path.Combine(next.TempFolder, next.DownloadInfo.FileName));
+            client.DownloadFileAsync(new Uri(next.DownloadInfo.Urls[urlIndex]), Path.Combine(next.TempFolder, next.DownloadInfo.FileName));
         }
 
         public void QueueFile(DownloadInfo downloadInfo, Action<string> fileCallback)
         {
             filesToDownload.Add(new QueueItem { DownloadInfo = downloadInfo, FileCallback = fileCallback });
+        }
+
+        public void QueueFile(IExternalComponent component)
+        {
+            filesToDownload.Add(new QueueItem { DownloadInfo = component.DownloadInfo, FileCallback = component.Install });
         }
 
         private void DisplayProgress()

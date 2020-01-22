@@ -210,24 +210,6 @@
   <data name="EmailError" xml:space="preserve">
     <value>An error occurred while trying to send an email.</value>
   </data>
-  <data name="AutoUpdates" xml:space="preserve">
-    <value>Automatic Updates</value>
-  </data>
-  <data name="Download" xml:space="preserve">
-    <value>Download</value>
-  </data>
-  <data name="DownloadAndInstall" xml:space="preserve">
-    <value>Download and Install</value>
-  </data>
-  <data name="EnableAutoUpdates" xml:space="preserve">
-    <value>Do you want NAPS2 to automatically check for updates?</value>
-  </data>
-  <data name="NotNow" xml:space="preserve">
-    <value>Not Now</value>
-  </data>
-  <data name="UpdateNow" xml:space="preserve">
-    <value>A newer version of NAPS2 is available. Do you want to update now?</value>
-  </data>
   <data name="InstallComplete" xml:space="preserve">
     <value>Installation Complete</value>
   </data>
@@ -282,8 +264,14 @@
   <data name="ExitWithUnsavedChanges" xml:space="preserve">
     <value>You have unsaved changes. Are you sure you want to exit and discard those changes?</value>
   </data>
+  <data name="ExitWithActiveOperations" xml:space="preserve">
+    <value>An operation is in progress. Are you sure you want to exit and cancel the operation?</value>
+  </data>
   <data name="UnsavedChanges" xml:space="preserve">
     <value>Unsaved Changes</value>
+  </data>
+  <data name="ActiveOperations" xml:space="preserve">
+    <value>Operation in Progress</value>
   </data>
   <data name="ScanPageProgress" xml:space="preserve">
     <value>Scanning page {0}</value>
@@ -354,14 +342,23 @@
   <data name="RecoveryProgress" xml:space="preserve">
     <value>Recovery Progress</value>
   </data>
+  <data name="SaveImages" xml:space="preserve">
+    <value>Save Images</value>
+  </data>
   <data name="SaveImagesProgress" xml:space="preserve">
     <value>Save Images Progress</value>
+  </data>
+  <data name="SavePdf" xml:space="preserve">
+    <value>Save PDF</value>
   </data>
   <data name="SavePdfProgress" xml:space="preserve">
     <value>Save PDF Progress</value>
   </data>
   <data name="SavingFormat" xml:space="preserve">
     <value>Saving {0}...</value>
+  </data>
+  <data name="Print" xml:space="preserve">
+    <value>Print</value>
   </data>
   <data name="Copying" xml:space="preserve">
     <value>Copying...</value>
@@ -371,6 +368,9 @@
   </data>
   <data name="Importing" xml:space="preserve">
     <value>Importing...</value>
+  </data>
+  <data name="EmailPdf" xml:space="preserve">
+    <value>Email PDF</value>
   </data>
   <data name="EmailPdfProgress" xml:space="preserve">
     <value>Email PDF Progress</value>
@@ -416,5 +416,89 @@
   </data>
   <data name="FileInUse" xml:space="preserve">
     <value>The file could not be overwritten because it is currently in use.</value>
+  </data>
+  <data name="AutoDeskewing" xml:space="preserve">
+    <value>Deskewing...</value>
+  </data>
+  <data name="AutoDeskewProgress" xml:space="preserve">
+    <value>Deskew Progress</value>
+  </data>
+  <data name="DownloadNeeded" xml:space="preserve">
+    <value>Download Needed</value>
+  </data>
+  <data name="PdfImportComponentNeeded" xml:space="preserve">
+    <value>An additional component is needed to import this PDF file. Would you like to download it now?</value>
+  </data>
+  <data name="ConfirmCancelBatch" xml:space="preserve">
+    <value>Are you sure you want to cancel the batch scan?</value>
+  </data>
+  <data name="CancelBatch" xml:space="preserve">
+    <value>Cancel Batch</value>
+  </data>
+  <data name="Donate" xml:space="preserve">
+    <value>Donate</value>
+  </data>
+  <data name="DonatePrompt" xml:space="preserve">
+    <value>NAPS2 is completely free. Consider making a donation.</value>
+  </data>
+  <data name="SaneNotAvailable" xml:space="preserve">
+    <value>The SANE driver is not available. Make sure to install the required packages:</value>
+  </data>
+  <data name="TesseractNotAvailable" xml:space="preserve">
+    <value>The OCR engine is not available. Make sure to install the required package:</value>
+  </data>
+  <data name="DriverNotSupported" xml:space="preserve">
+    <value>The selected driver is not supported on this system.</value>
+  </data>
+  <data name="OcrProgress" xml:space="preserve">
+    <value>OCR Progress</value>
+  </data>
+  <data name="RunningOcr" xml:space="preserve">
+    <value>Running OCR...</value>
+  </data>
+  <data name="UpdateProgress" xml:space="preserve">
+    <value>Update Progress</value>
+  </data>
+  <data name="Updating" xml:space="preserve">
+    <value>Updating...</value>
+  </data>
+  <data name="NoUpdates" xml:space="preserve">
+    <value>No updates available.</value>
+  </data>
+  <data name="CheckingForUpdates" xml:space="preserve">
+    <value>Checking...</value>
+  </data>
+  <data name="UpdateError" xml:space="preserve">
+    <value>An error occured when trying to install the update.</value>
+  </data>
+  <data name="Install" xml:space="preserve">
+    <value>Install {0}</value>
+  </data>
+  <data name="UpdateAvailable" xml:space="preserve">
+    <value>An update is available.</value>
+  </data>
+  <data name="AuthError" xml:space="preserve">
+    <value>An error occurred when trying to authorize.</value>
+  </data>
+  <data name="UploadingEmail" xml:space="preserve">
+    <value>Uploading email...</value>
+  </data>
+  <data name="ErrorEmailing" xml:space="preserve">
+    <value>An error occurred when trying to send the email.</value>
+  </data>
+  <data name="Naps2Server" xml:space="preserve">
+    <value>NAPS2 Server</value>
+  </data>
+  <data name="ServerStarted" xml:space="preserve">
+    <value>Server started</value>
+  </data>
+  <data name="ListeningOnPort" xml:space="preserve">
+    <value>Listening on port {0}</value>
+  </data>
+  <data name="ScanProgressPage" xml:space="preserve">
+    <value>Scanning page {0}...</value>
+  </data>
+  <data name="AcquiringData" xml:space="preserve">
+    <value>Acquiring data...</value>
   </data>
 </root>

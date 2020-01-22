@@ -1,107 +1,89 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
 
 namespace NAPS2.ImportExport.Images
 {
-    class TiffHelper
+    public class TiffHelper
     {
-        public static bool SaveMultipage(List<ScannedImage> images, string location, Func<int, bool> progressCallback)
+        private readonly ScannedImageRenderer scannedImageRenderer;
+
+        public TiffHelper(ScannedImageRenderer scannedImageRenderer)
+        {
+            this.scannedImageRenderer = scannedImageRenderer;
+        }
+
+        public async Task<bool> SaveMultipage(List<ScannedImage.Snapshot> snapshots, string location, TiffCompression compression, ProgressHandler progressCallback, CancellationToken cancelToken)
         {
             try
             {
                 ImageCodecInfo codecInfo = GetCodecForString("TIFF");
 
-                if (!progressCallback(0))
+                progressCallback(0, snapshots.Count);
+                if (cancelToken.IsCancellationRequested)
                 {
                     return false;
                 }
 
                 PathHelper.EnsureParentDirExists(location);
 
-                if (images.Count == 1)
+                if (snapshots.Count == 1)
                 {
                     var iparams = new EncoderParameters(1);
                     Encoder iparam = Encoder.Compression;
-                    var iparamPara = new EncoderParameter(iparam, (long)(EncoderValue.CompressionLZW));
-                    iparams.Param[0] = iparamPara;
-                    using (var bitmap = images[0].GetImage())
+                    using (var bitmap = await scannedImageRenderer.Render(snapshots[0]))
                     {
+                        ValidateBitmap(bitmap);
+                        var iparamPara = new EncoderParameter(iparam, (long)GetEncoderValue(compression, bitmap));
+                        iparams.Param[0] = iparamPara;
                         bitmap.Save(location, codecInfo, iparams);
                     }
                 }
-                else if (images.Count > 1)
+                else if (snapshots.Count > 1)
                 {
-                    Encoder saveEncoder;
-                    Encoder compressionEncoder;
-                    EncoderParameter SaveEncodeParam;
-                    EncoderParameter CompressionEncodeParam;
                     var encoderParams = new EncoderParameters(2);
-
-                    saveEncoder = Encoder.SaveFlag;
-                    compressionEncoder = Encoder.Compression;
-
-                    // Save the first page (frame).
-                    SaveEncodeParam = new EncoderParameter(saveEncoder, (long)EncoderValue.MultiFrame);
-                    CompressionEncodeParam = new EncoderParameter(compressionEncoder, (long)EncoderValue.CompressionLZW);
-                    encoderParams.Param[0] = CompressionEncodeParam;
-                    encoderParams.Param[1] = SaveEncodeParam;
+                    var saveEncoder = Encoder.SaveFlag;
+                    var compressionEncoder = Encoder.Compression;
 
                     File.Delete(location);
-                    using (var bitmap0 = images[0].GetImage())
+                    using (var bitmap0 = await scannedImageRenderer.Render(snapshots[0]))
                     {
+                        ValidateBitmap(bitmap0);
+                        encoderParams.Param[0] = new EncoderParameter(compressionEncoder, (long)GetEncoderValue(compression, bitmap0));
+                        encoderParams.Param[1] = new EncoderParameter(saveEncoder, (long)EncoderValue.MultiFrame);
                         bitmap0.Save(location, codecInfo, encoderParams);
 
-                        for (int i = 1; i < images.Count; i++)
+                        for (int i = 1; i < snapshots.Count; i++)
                         {
-                            if (images[i] == null)
+                            if (snapshots[i] == null)
                                 break;
 
-                            if (!progressCallback(i))
+                            progressCallback(i, snapshots.Count);
+                            if (cancelToken.IsCancellationRequested)
                             {
                                 bitmap0.Dispose();
                                 File.Delete(location);
                                 return false;
                             }
 
-                            SaveEncodeParam = new EncoderParameter(saveEncoder, (long) EncoderValue.FrameDimensionPage);
-                            CompressionEncodeParam = new EncoderParameter(compressionEncoder,
-                                (long) EncoderValue.CompressionLZW);
-                            encoderParams.Param[0] = CompressionEncodeParam;
-                            encoderParams.Param[1] = SaveEncodeParam;
-                            using (var bitmap = images[i].GetImage())
+                            using (var bitmap = await scannedImageRenderer.Render(snapshots[i]))
                             {
+                                ValidateBitmap(bitmap);
+                                encoderParams.Param[0] = new EncoderParameter(compressionEncoder, (long)GetEncoderValue(compression, bitmap));
+                                encoderParams.Param[1] = new EncoderParameter(saveEncoder, (long)EncoderValue.FrameDimensionPage);
                                 bitmap0.SaveAdd(bitmap, encoderParams);
                             }
                         }
 
-                        SaveEncodeParam = new EncoderParameter(saveEncoder, (long) EncoderValue.Flush);
-                        encoderParams.Param[0] = SaveEncodeParam;
+                        encoderParams.Param[0] = new EncoderParameter(saveEncoder, (long)EncoderValue.Flush);
                         bitmap0.SaveAdd(encoderParams);
                     }
                 }
@@ -115,7 +97,60 @@ namespace NAPS2.ImportExport.Images
             }
 
         }
-        private static ImageCodecInfo GetCodecForString(string type)
+
+        private EncoderValue GetEncoderValue(TiffCompression compression, Bitmap bitmap)
+        {
+            switch (compression)
+            {
+                case TiffCompression.None:
+                    return EncoderValue.CompressionNone;
+                case TiffCompression.Ccitt4:
+                    return EncoderValue.CompressionCCITT4;
+                case TiffCompression.Lzw:
+                    return EncoderValue.CompressionLZW;
+                default:
+                    if (bitmap.PixelFormat == PixelFormat.Format1bppIndexed
+                        && bitmap.Palette.Entries.Length == 2
+                        && bitmap.Palette.Entries[0].ToArgb() == Color.Black.ToArgb()
+                        && bitmap.Palette.Entries[1].ToArgb() == Color.White.ToArgb())
+                    {
+                        return EncoderValue.CompressionCCITT4;
+                    }
+                    else
+                    {
+                        return EncoderValue.CompressionLZW;
+                    }
+            }
+        }
+
+        private void ValidateBitmap(Bitmap bitmap)
+        {
+            if (bitmap.PixelFormat == PixelFormat.Format1bppIndexed
+                && bitmap.Palette.Entries.Length == 2
+                && bitmap.Palette.Entries[0].ToArgb() == Color.White.ToArgb()
+                && bitmap.Palette.Entries[1].ToArgb() == Color.Black.ToArgb())
+            {
+                // Inverted palette (0 = white); some scanners may produce bitmaps like this
+                // It won't encode properly in a TIFF, so we need to invert the encoding
+                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadWrite, bitmap.PixelFormat);
+                var stride = Math.Abs(data.Stride);
+                for (int y = 0; y < data.Height; y++)
+                {
+                    for (int x = 0; x < data.Width; x += 8)
+                    {
+                        byte b = Marshal.ReadByte(data.Scan0 + y * stride + x / 8);
+                        int bits = Math.Min(8, data.Width - x);
+                        b ^= (byte)(0xFF << (8 - bits));
+                        Marshal.WriteByte(data.Scan0 + y * stride + x / 8, b);
+                    }
+                }
+                bitmap.UnlockBits(data);
+                bitmap.Palette.Entries[0] = Color.Black;
+                bitmap.Palette.Entries[1] = Color.White;
+            }
+        }
+
+        private ImageCodecInfo GetCodecForString(string type)
         {
             ImageCodecInfo[] info = ImageCodecInfo.GetImageEncoders();
             return info.FirstOrDefault(t => t.FormatDescription.Equals(type));

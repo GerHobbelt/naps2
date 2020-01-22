@@ -1,30 +1,13 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using NAPS2.ImportExport.Email;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
+using NAPS2.Ocr;
 using NAPS2.Operation;
 using NAPS2.Scan.Images;
 using NAPS2.Util;
@@ -36,55 +19,86 @@ namespace NAPS2.ImportExport.Pdf
         private readonly FileNamePlaceholders fileNamePlaceholders;
         private readonly IPdfExporter pdfExporter;
         private readonly IOverwritePrompt overwritePrompt;
-        private readonly ThreadFactory threadFactory;
+        private readonly IEmailProviderFactory emailProviderFactory;
 
-        private bool cancel;
-        private Thread thread;
-
-        public SavePdfOperation(FileNamePlaceholders fileNamePlaceholders, IPdfExporter pdfExporter, IOverwritePrompt overwritePrompt, ThreadFactory threadFactory)
+        public SavePdfOperation(FileNamePlaceholders fileNamePlaceholders, IPdfExporter pdfExporter, IOverwritePrompt overwritePrompt, IEmailProviderFactory emailProviderFactory)
         {
             this.fileNamePlaceholders = fileNamePlaceholders;
             this.pdfExporter = pdfExporter;
             this.overwritePrompt = overwritePrompt;
-            this.threadFactory = threadFactory;
+            this.emailProviderFactory = emailProviderFactory;
 
             AllowCancel = true;
+            AllowBackground = true;
         }
 
-        public bool Start(string fileName, DateTime dateTime, ICollection<ScannedImage> images, PdfSettings pdfSettings, string ocrLanguageCode, bool email)
+        public string FirstFileSaved { get; private set; }
+
+        public bool Start(string fileName, DateTime dateTime, ICollection<ScannedImage> images, PdfSettings pdfSettings, OcrParams ocrParams, bool email, EmailMessage emailMessage)
         {
             ProgressTitle = email ? MiscResources.EmailPdfProgress : MiscResources.SavePdfProgress;
-            var subFileName = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime);
             Status = new OperationStatus
             {
-                StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(subFileName)),
                 MaxProgress = images.Count
             };
-            cancel = false;
 
-            if (Directory.Exists(subFileName))
+            if (Directory.Exists(fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime)))
             {
                 // Not supposed to be a directory, but ok...
-                subFileName = fileNamePlaceholders.SubstitutePlaceholders(Path.Combine(subFileName, "$(n).pdf"), dateTime);
+                fileName = Path.Combine(fileName, "$(n).pdf");
             }
-            if (File.Exists(subFileName))
+
+            var singleFile = !pdfSettings.SinglePagePdf || images.Count == 1;
+            var subFileName = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime);
+            if (singleFile)
             {
-                if (overwritePrompt.ConfirmOverwrite(subFileName) != DialogResult.Yes)
+                if (File.Exists(subFileName) && overwritePrompt.ConfirmOverwrite(subFileName) != DialogResult.Yes)
                 {
                     return false;
                 }
             }
 
-            thread = threadFactory.StartThread(() =>
+            var snapshots = images.Select(x => x.Preserve()).ToList();
+            var snapshotsByFile = pdfSettings.SinglePagePdf ? snapshots.Select(x => new[] { x }).ToArray() : new[] { snapshots.ToArray() };
+            RunAsync(async () =>
             {
+                bool result = false;
                 try
                 {
-                    Status.Success = pdfExporter.Export(subFileName, images, pdfSettings, ocrLanguageCode, i =>
+                    int digits = (int)Math.Floor(Math.Log10(snapshots.Count)) + 1;
+                    int i = 0;
+                    foreach (var snapshotArray in snapshotsByFile)
                     {
-                        Status.CurrentProgress = i;
+                        subFileName = fileNamePlaceholders.SubstitutePlaceholders(fileName, dateTime, true, i, singleFile ? 0 : digits);
+                        Status.StatusText = string.Format(MiscResources.SavingFormat, Path.GetFileName(subFileName));
                         InvokeStatusChanged();
-                        return !cancel;
-                    });
+                        if (singleFile && IsFileInUse(subFileName, out var ex))
+                        {
+                            InvokeError(MiscResources.FileInUse, ex);
+                            break;
+                        }
+
+                        var progress = singleFile ? OnProgress : (ProgressHandler)((j, k) => { });
+                        result = await pdfExporter.Export(subFileName, snapshotArray, pdfSettings, ocrParams, progress, CancelToken);
+                        if (!result || CancelToken.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                        emailMessage?.Attachments.Add(new EmailAttachment
+                        {
+                            FilePath = subFileName,
+                            AttachmentName = Path.GetFileName(subFileName)
+                        });
+                        if (i == 0)
+                        {
+                            FirstFileSaved = subFileName;
+                        }
+                        i++;
+                        if (!singleFile)
+                        {
+                            OnProgress(i, snapshotsByFile.Length);
+                        }
+                    }
                 }
                 catch (UnauthorizedAccessException ex)
                 {
@@ -107,21 +121,83 @@ namespace NAPS2.ImportExport.Pdf
                     Log.ErrorException(MiscResources.ErrorSaving, ex);
                     InvokeError(MiscResources.ErrorSaving, ex);
                 }
-                GC.Collect();
-                InvokeFinished();
+                finally
+                {
+                    snapshots.ForEach(s => s.Dispose());
+                    GC.Collect();
+                }
+
+                if (result && !CancelToken.IsCancellationRequested && email && emailMessage != null)
+                {
+                    Status.StatusText = MiscResources.UploadingEmail;
+                    Status.CurrentProgress = 0;
+                    Status.MaxProgress = 1;
+                    Status.ProgressType = OperationProgressType.MB;
+                    InvokeStatusChanged();
+
+                    try
+                    {
+                        result = await emailProviderFactory.Default.SendEmail(emailMessage, OnProgress, CancelToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.ErrorException(MiscResources.ErrorEmailing, ex);
+                        InvokeError(MiscResources.ErrorEmailing, ex);
+                    }
+                }
+
+                return result;
             });
+            Success.ContinueWith(task =>
+            {
+                if (task.Result)
+                {
+                    if (email)
+                    {
+                        Log.Event(EventType.Email, new Event
+                        {
+                            Name = MiscResources.EmailPdf,
+                            Pages = snapshots.Count,
+                            FileFormat = ".pdf"
+                        });
+                    }
+                    else
+                    {
+                        Log.Event(EventType.SavePdf, new Event
+                        {
+                            Name = MiscResources.SavePdf,
+                            Pages = snapshots.Count,
+                            FileFormat = ".pdf"
+                        });
+                    }
+                }
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
 
             return true;
         }
 
-        public override void Cancel()
+        private bool IsFileInUse(string filePath, out Exception exception)
         {
-            cancel = true;
-        }
-
-        public void WaitUntilFinished()
-        {
-            thread.Join();
+            // TODO: Generalize this for images too
+            exception = null;
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    using (new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
+                    }
+                }
+                catch (IOException ex)
+                {
+                    exception = ex;
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

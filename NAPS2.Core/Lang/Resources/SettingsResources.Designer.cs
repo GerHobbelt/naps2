@@ -19,7 +19,7 @@ namespace NAPS2.Lang.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class SettingsResources {
@@ -160,6 +160,42 @@ namespace NAPS2.Lang.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to No provider selected..
+        /// </summary>
+        internal static string EmailProvider_NotSelected {
+            get {
+                return ResourceManager.GetString("EmailProvider_NotSelected", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Custom SMTP.
+        /// </summary>
+        internal static string EmailProviderType_CustomSmtp {
+            get {
+                return ResourceManager.GetString("EmailProviderType_CustomSmtp", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Gmail.
+        /// </summary>
+        internal static string EmailProviderType_Gmail {
+            get {
+                return ResourceManager.GetString("EmailProviderType_Gmail", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Outlook Web Access.
+        /// </summary>
+        internal static string EmailProviderType_OutlookWeb {
+            get {
+                return ResourceManager.GetString("EmailProviderType_OutlookWeb", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Center.
         /// </summary>
         internal static string HorizontalAlign_Center {
@@ -286,6 +322,51 @@ namespace NAPS2.Lang.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Default.
+        /// </summary>
+        internal static string PdfCompat_Default {
+            get {
+                return ResourceManager.GetString("PdfCompat_Default", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to PDF/A-1b.
+        /// </summary>
+        internal static string PdfCompat_PdfA1B {
+            get {
+                return ResourceManager.GetString("PdfCompat_PdfA1B", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to PDF/A-2b.
+        /// </summary>
+        internal static string PdfCompat_PdfA2B {
+            get {
+                return ResourceManager.GetString("PdfCompat_PdfA2B", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to PDF/A-3b.
+        /// </summary>
+        internal static string PdfCompat_PdfA3B {
+            get {
+                return ResourceManager.GetString("PdfCompat_PdfA3B", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to PDF/A-3u.
+        /// </summary>
+        internal static string PdfCompat_PdfA3U {
+            get {
+                return ResourceManager.GetString("PdfCompat_PdfA3U", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to 1:1.
         /// </summary>
         internal static string Scale_1_1 {
@@ -349,6 +430,42 @@ namespace NAPS2.Lang.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Auto.
+        /// </summary>
+        internal static string TiffComp_Auto {
+            get {
+                return ResourceManager.GetString("TiffComp_Auto", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to CCITT4.
+        /// </summary>
+        internal static string TiffComp_Ccitt4 {
+            get {
+                return ResourceManager.GetString("TiffComp_Ccitt4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to LZW.
+        /// </summary>
+        internal static string TiffComp_Lzw {
+            get {
+                return ResourceManager.GetString("TiffComp_Lzw", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to None.
+        /// </summary>
+        internal static string TiffComp_None {
+            get {
+                return ResourceManager.GetString("TiffComp_None", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Default.
         /// </summary>
         internal static string TwainImpl_Default {
@@ -367,6 +484,15 @@ namespace NAPS2.Lang.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Alternative Transfer.
+        /// </summary>
+        internal static string TwainImpl_MemXfer {
+            get {
+                return ResourceManager.GetString("TwainImpl_MemXfer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Old DSM.
         /// </summary>
         internal static string TwainImpl_OldDsm {
@@ -381,6 +507,33 @@ namespace NAPS2.Lang.Resources {
         internal static string TwainImpl_X64 {
             get {
                 return ResourceManager.GetString("TwainImpl_X64", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Default.
+        /// </summary>
+        internal static string WiaVersion_Default {
+            get {
+                return ResourceManager.GetString("WiaVersion_Default", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 1.0.
+        /// </summary>
+        internal static string WiaVersion_Wia10 {
+            get {
+                return ResourceManager.GetString("WiaVersion_Wia10", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 2.0.
+        /// </summary>
+        internal static string WiaVersion_Wia20 {
+            get {
+                return ResourceManager.GetString("WiaVersion_Wia20", resourceCulture);
             }
         }
     }

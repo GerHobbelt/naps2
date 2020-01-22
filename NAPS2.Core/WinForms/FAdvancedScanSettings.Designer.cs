@@ -42,6 +42,7 @@ namespace NAPS2.WinForms
             this.tbImageQuality = new System.Windows.Forms.TrackBar();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
+            this.cbForcePageSizeCrop = new System.Windows.Forms.CheckBox();
             this.cbFlipDuplex = new System.Windows.Forms.CheckBox();
             this.cbWiaOffsetWidth = new System.Windows.Forms.CheckBox();
             this.cbForcePageSize = new System.Windows.Forms.CheckBox();
@@ -57,12 +58,17 @@ namespace NAPS2.WinForms
             this.txtWhiteThreshold = new System.Windows.Forms.TextBox();
             this.cbExcludeBlankPages = new System.Windows.Forms.CheckBox();
             this.btnRestoreDefaults = new System.Windows.Forms.Button();
+            this.groupBox4 = new System.Windows.Forms.GroupBox();
+            this.cbAutoDeskew = new System.Windows.Forms.CheckBox();
+            this.cmbWiaVersion = new System.Windows.Forms.ComboBox();
+            this.label4 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.tbImageQuality)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.tbCoverageThreshold)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.tbWhiteThreshold)).BeginInit();
+            this.groupBox4.SuspendLayout();
             this.SuspendLayout();
             // 
             // btnOK
@@ -111,6 +117,9 @@ namespace NAPS2.WinForms
             // 
             // groupBox2
             // 
+            this.groupBox2.Controls.Add(this.cmbWiaVersion);
+            this.groupBox2.Controls.Add(this.label4);
+            this.groupBox2.Controls.Add(this.cbForcePageSizeCrop);
             this.groupBox2.Controls.Add(this.cbFlipDuplex);
             this.groupBox2.Controls.Add(this.cbWiaOffsetWidth);
             this.groupBox2.Controls.Add(this.cbForcePageSize);
@@ -120,6 +129,12 @@ namespace NAPS2.WinForms
             resources.ApplyResources(this.groupBox2, "groupBox2");
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.TabStop = false;
+            // 
+            // cbForcePageSizeCrop
+            // 
+            resources.ApplyResources(this.cbForcePageSizeCrop, "cbForcePageSizeCrop");
+            this.cbForcePageSizeCrop.Name = "cbForcePageSizeCrop";
+            this.cbForcePageSizeCrop.UseVisualStyleBackColor = true;
             // 
             // cbFlipDuplex
             // 
@@ -222,11 +237,37 @@ namespace NAPS2.WinForms
             this.btnRestoreDefaults.UseVisualStyleBackColor = true;
             this.btnRestoreDefaults.Click += new System.EventHandler(this.btnRestoreDefaults_Click);
             // 
+            // groupBox4
+            // 
+            this.groupBox4.Controls.Add(this.cbAutoDeskew);
+            resources.ApplyResources(this.groupBox4, "groupBox4");
+            this.groupBox4.Name = "groupBox4";
+            this.groupBox4.TabStop = false;
+            // 
+            // cbAutoDeskew
+            // 
+            resources.ApplyResources(this.cbAutoDeskew, "cbAutoDeskew");
+            this.cbAutoDeskew.Name = "cbAutoDeskew";
+            this.cbAutoDeskew.UseVisualStyleBackColor = true;
+            // 
+            // cmbWiaVersion
+            // 
+            this.cmbWiaVersion.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbWiaVersion.FormattingEnabled = true;
+            resources.ApplyResources(this.cmbWiaVersion, "cmbWiaVersion");
+            this.cmbWiaVersion.Name = "cmbWiaVersion";
+            // 
+            // label4
+            // 
+            resources.ApplyResources(this.label4, "label4");
+            this.label4.Name = "label4";
+            // 
             // FAdvancedScanSettings
             // 
             this.AcceptButton = this.btnOK;
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.btnRestoreDefaults);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
@@ -245,6 +286,8 @@ namespace NAPS2.WinForms
             this.groupBox3.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.tbCoverageThreshold)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.tbWhiteThreshold)).EndInit();
+            this.groupBox4.ResumeLayout(false);
+            this.groupBox4.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -275,5 +318,10 @@ namespace NAPS2.WinForms
         private System.Windows.Forms.CheckBox cbWiaOffsetWidth;
         private System.Windows.Forms.CheckBox cbFlipDuplex;
         private System.Windows.Forms.Button btnRestoreDefaults;
+        private System.Windows.Forms.CheckBox cbForcePageSizeCrop;
+        private System.Windows.Forms.GroupBox groupBox4;
+        private System.Windows.Forms.CheckBox cbAutoDeskew;
+        private System.Windows.Forms.ComboBox cmbWiaVersion;
+        private System.Windows.Forms.Label label4;
     }
 }

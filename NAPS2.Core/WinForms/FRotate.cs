@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -32,66 +12,33 @@ using Timer = System.Threading.Timer;
 
 namespace NAPS2.WinForms
 {
-    partial class FRotate : FormBase
+    partial class FRotate : ImageForm
     {
-        private readonly ChangeTracker changeTracker;
-        private readonly ThumbnailRenderer thumbnailRenderer;
+        private const int MIN_LINE_DISTANCE = 50;
+        private const float LINE_PEN_SIZE = 1;
 
-        private Bitmap workingImage;
-        private bool previewOutOfDate;
-        private bool working;
-        private Timer previewTimer;
+        private bool guideExists;
+        private Point guideStart, guideEnd;
 
-        public FRotate(ChangeTracker changeTracker, ThumbnailRenderer thumbnailRenderer)
+        public FRotate(ChangeTracker changeTracker, ScannedImageRenderer scannedImageRenderer)
+            : base(changeTracker, scannedImageRenderer)
         {
-            this.changeTracker = changeTracker;
-            this.thumbnailRenderer = thumbnailRenderer;
             InitializeComponent();
-
-            RotationTransform = new RotationTransform();
-        }
-
-        public ScannedImage Image { get; set; }
-
-        public List<ScannedImage> SelectedImages { get; set; }
-
-        public RotationTransform RotationTransform { get; private set; }
-
-        private IEnumerable<ScannedImage> ImagesToTransform
-        {
-            get
-            {
-                return SelectedImages != null && checkboxApplyToSelected.Checked ? SelectedImages : Enumerable.Repeat(Image, 1);
-            }
-        }
-
-        protected override void OnLoad(object sender, EventArgs eventArgs)
-        {
-            if (SelectedImages != null && SelectedImages.Count > 1)
-            {
-                checkboxApplyToSelected.Text = string.Format(checkboxApplyToSelected.Text, SelectedImages.Count);
-            }
-            else
-            {
-                ConditionalControls.Hide(checkboxApplyToSelected, 6);
-            }
-
-            new LayoutManager(this)
-                .Bind(tbAngle, pictureBox)
-                    .WidthToForm()
-                .Bind(pictureBox)
-                    .HeightToForm()
-                .Bind(btnOK, btnCancel, txtAngle)
-                    .RightToForm()
-                .Bind(tbAngle, txtAngle, checkboxApplyToSelected, btnRevert, btnOK, btnCancel)
-                    .BottomToForm()
-                .Activate();
-            Size = new Size(600, 600);
-
-            workingImage = Image.GetImage();
-            pictureBox.Image = (Bitmap)workingImage.Clone();
             txtAngle.Text += '\u00B0';
-            UpdatePreviewBox();
+            ActiveControl = txtAngle;
+        }
+
+        public RotationTransform RotationTransform { get; private set; } = new RotationTransform();
+
+        protected override IEnumerable<Transform> Transforms => new[] { RotationTransform };
+
+        protected override PictureBox PictureBox => pictureBox;
+
+        protected override void ResetTransform()
+        {
+            RotationTransform = new RotationTransform();
+            tbAngle.Value = 0;
+            txtAngle.Text = (tbAngle.Value / 10.0).ToString("G");
         }
 
         private void UpdateTransform()
@@ -100,76 +47,9 @@ namespace NAPS2.WinForms
             UpdatePreviewBox();
         }
 
-        private void UpdatePreviewBox()
-        {
-            if (previewTimer == null)
-            {
-                previewTimer = new Timer((obj) =>
-                {
-                    if (previewOutOfDate && !working)
-                    {
-                        working = true;
-                        previewOutOfDate = false;
-                        var result = RotationTransform.Perform((Bitmap)workingImage.Clone());
-                        Invoke(new MethodInvoker(() =>
-                        {
-                            if (pictureBox.Image != null)
-                            {
-                                pictureBox.Image.Dispose();
-                            }
-                            pictureBox.Image = result;
-                        }));
-                        working = false;
-                    }
-                }, null, 0, 100);
-            }
-            previewOutOfDate = true;
-        }
-
-        private void btnCancel_Click(object sender, EventArgs e)
-        {
-            Close();
-        }
-
-        private void btnOK_Click(object sender, EventArgs e)
-        {
-            if (!RotationTransform.IsNull)
-            {
-                foreach (var img in ImagesToTransform)
-                {
-                    img.AddTransform(RotationTransform);
-                    img.SetThumbnail(thumbnailRenderer.RenderThumbnail(img));
-                }
-                changeTracker.HasUnsavedChanges = true;
-            }
-            Close();
-        }
-
-        private void btnRevert_Click(object sender, EventArgs e)
-        {
-            RotationTransform = new RotationTransform();
-            tbAngle.Value = 0;
-            txtAngle.Text = (tbAngle.Value / 10.0).ToString("G");
-            UpdatePreviewBox();
-        }
-
-        private void FRotate_FormClosed(object sender, FormClosedEventArgs e)
-        {
-            workingImage.Dispose();
-            if (pictureBox.Image != null)
-            {
-                pictureBox.Image.Dispose();
-            }
-            if (previewTimer != null)
-            {
-                previewTimer.Dispose();
-            }
-        }
-
         private void txtAngle_TextChanged(object sender, EventArgs e)
         {
-            double valueDouble;
-            if (double.TryParse(txtAngle.Text.Replace('\u00B0'.ToString(CultureInfo.InvariantCulture), ""), out valueDouble))
+            if (double.TryParse(txtAngle.Text.Replace('\u00B0'.ToString(CultureInfo.InvariantCulture), ""), out double valueDouble))
             {
                 int value = (int)Math.Round(valueDouble * 10);
                 if (value >= tbAngle.Minimum && value <= tbAngle.Maximum)
@@ -178,7 +58,9 @@ namespace NAPS2.WinForms
                 }
                 if (!txtAngle.Text.Contains('\u00B0'))
                 {
+                    var (ss, sl) = (txtAngle.SelectionStart, txtAngle.SelectionLength);
                     txtAngle.Text += '\u00B0';
+                    (txtAngle.SelectionStart, txtAngle.SelectionLength) = (ss, sl);
                 }
             }
             UpdateTransform();
@@ -189,12 +71,6 @@ namespace NAPS2.WinForms
             txtAngle.Text = (tbAngle.Value / 10.0).ToString("G") + '\u00B0';
             UpdateTransform();
         }
-
-        private bool guideExists;
-        private Point guideStart, guideEnd;
-
-        private const int MIN_LINE_DISTANCE = 50;
-        private const float LINE_PEN_SIZE = 1;
 
         private void pictureBox_MouseDown(object sender, MouseEventArgs e)
         {

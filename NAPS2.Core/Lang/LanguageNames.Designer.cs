@@ -19,7 +19,7 @@ namespace NAPS2.Lang {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class LanguageNames {
@@ -232,6 +232,15 @@ namespace NAPS2.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to 日本語.
+        /// </summary>
+        internal static string ja {
+            get {
+                return ResourceManager.GetString("ja", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to 한국어.
         /// </summary>
         internal static string ko {
@@ -277,6 +286,15 @@ namespace NAPS2.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Nynorsk.
+        /// </summary>
+        internal static string nn {
+            get {
+                return ResourceManager.GetString("nn", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Polski.
         /// </summary>
         internal static string pl {
@@ -318,6 +336,15 @@ namespace NAPS2.Lang {
         internal static string ru {
             get {
                 return ResourceManager.GetString("ru", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to සිංහල.
+        /// </summary>
+        internal static string si {
+            get {
+                return ResourceManager.GetString("si", resourceCulture);
             }
         }
         

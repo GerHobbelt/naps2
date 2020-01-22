@@ -6,6 +6,10 @@ using System.Resources;
 
 namespace NAPS2.Scan
 {
+    /// <summary>
+    /// An attribute used for enum values that assigns a string from a resources file.
+    /// The string value is accessed using the ScanEnumExtensions.Description extension method.
+    /// </summary>
     public class LocalizedDescriptionAttribute : DescriptionAttribute
     {
         private readonly string resourceName;
@@ -17,9 +21,6 @@ namespace NAPS2.Scan
             resourceManager = new ResourceManager(resourceType);
         }
 
-        public override string Description
-        {
-            get { return resourceManager.GetString(resourceName); }
-        }
+        public override string Description => resourceManager.GetString(resourceName);
     }
 }

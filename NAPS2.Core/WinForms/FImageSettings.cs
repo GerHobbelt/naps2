@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -26,7 +6,6 @@ using System.Linq;
 using System.Windows.Forms;
 using NAPS2.Config;
 using NAPS2.ImportExport.Images;
-using NAPS2.Lang.Resources;
 
 namespace NAPS2.WinForms
 {
@@ -42,6 +21,7 @@ namespace NAPS2.WinForms
             this.userConfigManager = userConfigManager;
             this.dialogHelper = dialogHelper;
             InitializeComponent();
+            AddEnumItems<TiffCompression>(cmbTiffCompr);
         }
 
         protected override void OnLoad(object sender, EventArgs e)
@@ -51,7 +31,7 @@ namespace NAPS2.WinForms
                     .BottomToForm()
                 .Bind(txtJpegQuality, btnOK, btnCancel, btnChooseFolder)
                     .RightToForm()
-                .Bind(txtDefaultFilePath, tbJpegQuality, lblWarning)
+                .Bind(txtDefaultFilePath, tbJpegQuality, lblWarning, groupTiff, groupJpeg)
                     .WidthToForm()
                 .Activate();
 
@@ -65,6 +45,8 @@ namespace NAPS2.WinForms
             txtDefaultFilePath.Text = imageSettings.DefaultFileName;
             cbSkipSavePrompt.Checked = imageSettings.SkipSavePrompt;
             txtJpegQuality.Text = imageSettings.JpegQuality.ToString(CultureInfo.InvariantCulture);
+            cmbTiffCompr.SelectedIndex = (int) imageSettings.TiffCompression;
+            cbSinglePageTiff.Checked = imageSettings.SinglePageTiff;
         }
 
         private void UpdateEnabled()
@@ -83,7 +65,9 @@ namespace NAPS2.WinForms
             {
                 DefaultFileName = txtDefaultFilePath.Text,
                 SkipSavePrompt = cbSkipSavePrompt.Checked,
-                JpegQuality = tbJpegQuality.Value
+                JpegQuality = tbJpegQuality.Value,
+                TiffCompression = (TiffCompression)cmbTiffCompr.SelectedIndex,
+                SinglePageTiff = cbSinglePageTiff.Checked
             };
 
             imageSettingsContainer.ImageSettings = imageSettings;
@@ -111,8 +95,7 @@ namespace NAPS2.WinForms
 
         private void txtJpegQuality_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtJpegQuality.Text, out value))
+            if (int.TryParse(txtJpegQuality.Text, out int value))
             {
                 if (value >= tbJpegQuality.Minimum && value <= tbJpegQuality.Maximum)
                 {
@@ -133,8 +116,7 @@ namespace NAPS2.WinForms
 
         private void btnChooseFolder_Click(object sender, EventArgs e)
         {
-            string savePath;
-            if (dialogHelper.PromptToSaveImage(txtDefaultFilePath.Text, out savePath))
+            if (dialogHelper.PromptToSaveImage(txtDefaultFilePath.Text, out string savePath))
             {
                 txtDefaultFilePath.Text = savePath;
             }

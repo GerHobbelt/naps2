@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -45,6 +25,7 @@ namespace NAPS2.WinForms
             if (ScanProfile.AutoSaveSettings != null)
             {
                 txtFilePath.Text = ScanProfile.AutoSaveSettings.FilePath;
+                cbPromptForFilePath.Checked = ScanProfile.AutoSaveSettings.PromptForFilePath;
                 cbClearAfterSave.Checked = ScanProfile.AutoSaveSettings.ClearImagesAfterSaving;
                 if (ScanProfile.AutoSaveSettings.Separator == SaveSeparator.FilePerScan)
                 {
@@ -68,10 +49,7 @@ namespace NAPS2.WinForms
                 .Activate();
         }
 
-        public bool Result
-        {
-            get { return result; }
-        }
+        public bool Result => result;
 
         public ScanProfile ScanProfile { get; set; }
 
@@ -80,6 +58,7 @@ namespace NAPS2.WinForms
             ScanProfile.AutoSaveSettings = new AutoSaveSettings
             {
                 FilePath = txtFilePath.Text,
+                PromptForFilePath = cbPromptForFilePath.Checked,
                 ClearImagesAfterSaving = cbClearAfterSave.Checked,
                 Separator = rdFilePerScan.Checked ? SaveSeparator.FilePerScan
                           : rdSeparateByPatchT.Checked ? SaveSeparator.PatchT
@@ -89,7 +68,7 @@ namespace NAPS2.WinForms
 
         private void btnOK_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(txtFilePath.Text))
+            if (string.IsNullOrWhiteSpace(txtFilePath.Text) && !cbPromptForFilePath.Checked)
             {
                 txtFilePath.Focus();
                 return;
@@ -106,8 +85,7 @@ namespace NAPS2.WinForms
 
         private void btnChooseFolder_Click(object sender, EventArgs e)
         {
-            string savePath;
-            if (dialogHelper.PromptToSavePdfOrImage(null, out savePath))
+            if (dialogHelper.PromptToSavePdfOrImage(null, out string savePath))
             {
                 txtFilePath.Text = savePath;
             }

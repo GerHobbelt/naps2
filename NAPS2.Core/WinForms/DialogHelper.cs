@@ -21,20 +21,21 @@ namespace NAPS2.WinForms
 
         public bool PromptToSavePdfOrImage(string defaultPath, out string savePath)
         {
+            var (fileName, fileDir) = SplitPath(defaultPath);
             var sd = new SaveFileDialog
             {
                 OverwritePrompt = false,
                 AddExtension = true,
-                Filter = MiscResources.FileTypePdf + "|*.pdf|" +
-                         MiscResources.FileTypeBmp + "|*.bmp|" +
-                         MiscResources.FileTypeEmf + "|*.emf|" +
-                         MiscResources.FileTypeExif + "|*.exif|" +
-                         MiscResources.FileTypeGif + "|*.gif|" +
-                         MiscResources.FileTypeJpeg + "|*.jpg;*.jpeg|" +
-                         MiscResources.FileTypePng + "|*.png|" +
-                         MiscResources.FileTypeTiff + "|*.tiff;*.tif",
-                FileName = Path.GetFileName(defaultPath),
-                InitialDirectory = GetDir(defaultPath)
+                Filter = MiscResources.FileTypePdf + @"|*.pdf|" +
+                         MiscResources.FileTypeBmp + @"|*.bmp|" +
+                         MiscResources.FileTypeEmf + @"|*.emf|" +
+                         MiscResources.FileTypeExif + @"|*.exif|" +
+                         MiscResources.FileTypeGif + @"|*.gif|" +
+                         MiscResources.FileTypeJpeg + @"|*.jpg;*.jpeg|" +
+                         MiscResources.FileTypePng + @"|*.png|" +
+                         MiscResources.FileTypeTiff + @"|*.tiff;*.tif",
+                FileName = fileName,
+                InitialDirectory = fileDir
             };
             if (sd.ShowDialog() == DialogResult.OK)
             {
@@ -47,13 +48,14 @@ namespace NAPS2.WinForms
 
         public bool PromptToSavePdf(string defaultPath, out string savePath)
         {
+            var (fileName, fileDir) = SplitPath(defaultPath);
             var sd = new SaveFileDialog
             {
                 OverwritePrompt = false,
                 AddExtension = true,
-                Filter = MiscResources.FileTypePdf + "|*.pdf",
-                FileName = Path.GetFileName(defaultPath),
-                InitialDirectory = GetDir(defaultPath)
+                Filter = MiscResources.FileTypePdf + @"|*.pdf",
+                FileName = fileName,
+                InitialDirectory = fileDir
             };
             if (sd.ShowDialog() == DialogResult.OK)
             {
@@ -66,19 +68,20 @@ namespace NAPS2.WinForms
 
         public bool PromptToSaveImage(string defaultPath, out string savePath)
         {
+            var (fileName, fileDir) = SplitPath(defaultPath);
             var sd = new SaveFileDialog
             {
                 OverwritePrompt = false,
                 AddExtension = true,
-                Filter = MiscResources.FileTypeBmp + "|*.bmp|" +
-                            MiscResources.FileTypeEmf + "|*.emf|" +
-                            MiscResources.FileTypeExif + "|*.exif|" +
-                            MiscResources.FileTypeGif + "|*.gif|" +
-                            MiscResources.FileTypeJpeg + "|*.jpg;*.jpeg|" +
-                            MiscResources.FileTypePng + "|*.png|" +
-                            MiscResources.FileTypeTiff + "|*.tiff;*.tif",
-                FileName = Path.GetFileName(defaultPath),
-                InitialDirectory = GetDir(defaultPath)
+                Filter = MiscResources.FileTypeBmp + @"|*.bmp|" +
+                            MiscResources.FileTypeEmf + @"|*.emf|" +
+                            MiscResources.FileTypeExif + @"|*.exif|" +
+                            MiscResources.FileTypeGif + @"|*.gif|" +
+                            MiscResources.FileTypeJpeg + @"|*.jpg;*.jpeg|" +
+                            MiscResources.FileTypePng + @"|*.png|" +
+                            MiscResources.FileTypeTiff + @"|*.tiff;*.tif",
+                FileName = fileName,
+                InitialDirectory = fileDir
             };
             switch ((userConfigManager.Config.LastImageExt ?? "").ToLowerInvariant())
             {
@@ -116,11 +119,15 @@ namespace NAPS2.WinForms
             return false;
         }
 
-        private string GetDir(string defaultPath)
+        private (string, string) SplitPath(string path)
         {
-            return Path.IsPathRooted(defaultPath)
-                ? Path.GetDirectoryName(defaultPath)
-                : "";
+            if (Directory.Exists(path))
+            {
+                return ("", path);
+            }
+            string dir = Path.IsPathRooted(path) ? Path.GetDirectoryName(path) : "";
+            string name = Path.GetFileName(path);
+            return (name, dir);
         }
 
         public void ShowErrorWithDetails(string errorMesage, string details)

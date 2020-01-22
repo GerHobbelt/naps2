@@ -1,16 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
-using System.Data;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
 namespace NAPS2.WinForms
 {
-    public partial class NotifyWidget : UserControl
+    public partial class NotifyWidget : NotifyWidgetBase
     {
         private readonly string linkTarget;
         private readonly string folderTarget;
@@ -27,24 +23,26 @@ namespace NAPS2.WinForms
             if (lblTitle.Width > Width - 35)
             {
                 Width = lblTitle.Width + 35;
-                btnClose.Location = new Point(Width - 24, btnClose.Location.Y);
-                linkLabel1.Width = Width - 10;
+            }
+            if (lblTitle.Height > Height - 35)
+            {
+                Height = lblTitle.Height + 35;
+            }
+
+            if (folderTarget == null)
+            {
+                contextMenuStrip1.Enabled = false;
             }
         }
-
-        public event EventHandler HideNotify;
 
         private void hideTimer_Tick(object sender, EventArgs e)
         {
             DoHideNotify();
         }
 
-        private void DoHideNotify()
+        protected void DoHideNotify()
         {
-            if (HideNotify != null)
-            {
-                HideNotify(this, new EventArgs());
-            }
+            InvokeHideNotify();
             hideTimer.Stop();
         }
 
@@ -63,12 +61,12 @@ namespace NAPS2.WinForms
             hideTimer.Start();
         }
 
-        public void ShowNotify()
+        public override void ShowNotify()
         {
             hideTimer.Start();
         }
 
-        private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        protected virtual void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
             {

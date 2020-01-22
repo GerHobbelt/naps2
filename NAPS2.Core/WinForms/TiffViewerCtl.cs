@@ -1,29 +1,10 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using NAPS2.Util;
 
 namespace NAPS2.WinForms
 {
@@ -56,7 +37,7 @@ namespace NAPS2.WinForms
 
         public Image Image
         {
-            get { return image; }
+            get => image;
             set
             {
                 image = value;
@@ -70,10 +51,7 @@ namespace NAPS2.WinForms
         {
             if (disposing)
             {
-                if (components != null)
-                {
-                    components.Dispose();
-                }
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -85,7 +63,7 @@ namespace NAPS2.WinForms
 
         private void AdjustZoom()
         {
-            if (tsStretch.Checked)
+            if (tsStretch.Checked && tiffviewer1.ImageWidth != 0 && tiffviewer1.ImageHeight != 0)
             {
                 double containerWidth = Math.Max(tiffviewer1.Width - 20, 0);
                 double containerHeight = Math.Max(tiffviewer1.Height - 20, 0);
@@ -124,6 +102,48 @@ namespace NAPS2.WinForms
         {
             // Pass through events to the parent form in case it listens for them
             OnKeyDown(e);
+
+            if (e.Control || e.Alt || e.Shift)
+            {
+                int m = e.Control ? 10 : e.Alt ? 5 : 1;
+                if (e.KeyCode == Keys.Up)
+                {
+                    DeltaScroll(tiffviewer1.VerticalScroll, -m);
+                }
+                if (e.KeyCode == Keys.Down)
+                {
+                    DeltaScroll(tiffviewer1.VerticalScroll, m);
+                }
+                if (e.KeyCode == Keys.Left)
+                {
+                    DeltaScroll(tiffviewer1.HorizontalScroll, -m);
+                }
+                if (e.KeyCode == Keys.Right)
+                {
+                    DeltaScroll(tiffviewer1.HorizontalScroll, m);
+                }
+            }
+        }
+
+        private void tiffviewer1_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Up:
+                case Keys.Down:
+                case Keys.Left:
+                case Keys.Right:
+                    e.IsInputKey = true;
+                    break;
+            }
+        }
+
+        private void DeltaScroll(ScrollProperties scroll, int direction)
+        {
+            int newValue = (scroll.Value + scroll.SmallChange * direction).Clamp(scroll.Minimum, scroll.Maximum);
+            // For whatever reason the scroll value is "sticky". Changing it twice seems to work fine.
+            scroll.Value = newValue;
+            scroll.Value = newValue;
         }
 
         #region Component Designer generated code
@@ -169,8 +189,9 @@ namespace NAPS2.WinForms
             resources.ApplyResources(this.tiffviewer1, "tiffviewer1");
             this.tiffviewer1.BackColor = System.Drawing.Color.White;
             this.tiffviewer1.Name = "tiffviewer1";
-            this.tiffviewer1.Zoom = 0;
+            this.tiffviewer1.Zoom = 0D;
             this.tiffviewer1.KeyDown += new System.Windows.Forms.KeyEventHandler(this.tiffviewer1_KeyDown);
+            this.tiffviewer1.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.tiffviewer1_PreviewKeyDown);
             // 
             // tStrip
             // 

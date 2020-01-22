@@ -1,41 +1,29 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2016       Alexander Rabenstein
-    Copyright (C) 2012-2016  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using NAPS2.Config;
+using NAPS2.Ocr;
+using NAPS2.Operation;
 using NAPS2.Scan.Images.Transforms;
-using ZXing;
+using NAPS2.Util;
 
 namespace NAPS2.Scan.Images
 {
-    internal static class ScannedImageHelper
+    public class ScannedImageHelper
     {
         public static string SaveSmallestBitmap(Bitmap sourceImage, ScanBitDepth bitDepth, bool highQuality, int quality, out ImageFormat imageFormat)
         {
             // Store the image in as little space as possible
-            if (bitDepth == ScanBitDepth.BlackWhite)
+            if (sourceImage.PixelFormat == PixelFormat.Format1bppIndexed)
+            {
+                // Already encoded as 1-bit
+                imageFormat = ImageFormat.Png;
+                return EncodePng(sourceImage);
+            }
+            else if (bitDepth == ScanBitDepth.BlackWhite)
             {
                 // Convert to a 1-bit bitmap before saving to help compression
                 // This is lossless and takes up minimal storage (best of both worlds), so highQuality is irrelevant
@@ -113,16 +101,35 @@ namespace NAPS2.Scan.Images
             return tempFilePath;
         }
 
-        public static Bitmap PostProcessStep1(Image output, ScanProfile profile)
+        private readonly ThumbnailRenderer thumbnailRenderer;
+        private readonly IOperationFactory operationFactory;
+        private readonly IOperationProgress operationProgress;
+        private readonly AppConfigManager appConfigManager;
+        private readonly IUserConfigManager userConfigManager;
+        private readonly OcrRequestQueue ocrRequestQueue;
+        private readonly OcrManager ocrManager;
+
+        public ScannedImageHelper(ThumbnailRenderer thumbnailRenderer, IOperationFactory operationFactory, IOperationProgress operationProgress, AppConfigManager appConfigManager, IUserConfigManager userConfigManager, OcrRequestQueue ocrRequestQueue, OcrManager ocrManager)
+        {
+            this.thumbnailRenderer = thumbnailRenderer;
+            this.operationFactory = operationFactory;
+            this.operationProgress = operationProgress;
+            this.appConfigManager = appConfigManager;
+            this.userConfigManager = userConfigManager;
+            this.ocrRequestQueue = ocrRequestQueue;
+            this.ocrManager = ocrManager;
+        }
+
+        public Bitmap PostProcessStep1(Image output, ScanProfile profile, bool supportsNativeUI = true)
         {
             double scaleFactor = 1;
-            if (!profile.UseNativeUI)
+            if (!profile.UseNativeUI || !supportsNativeUI)
             {
                 scaleFactor = profile.AfterScanScale.ToIntScaleFactor();
             }
             var result = ImageScaleHelper.ScaleImage(output, scaleFactor);
 
-            if (!profile.UseNativeUI && profile.ForcePageSize)
+            if ((!profile.UseNativeUI || !supportsNativeUI) && (profile.ForcePageSize || profile.ForcePageSizeCrop))
             {
                 float width = output.Width / output.HorizontalResolution;
                 float height = output.Height / output.VerticalResolution;
@@ -134,83 +141,126 @@ namespace NAPS2.Scan.Images
                 PageDimensions pageDimensions = profile.PageSize.PageDimensions() ?? profile.CustomPageSize;
                 if (pageDimensions.Width > pageDimensions.Height && width < height)
                 {
-                    // Flip dimensions
-                    result = new CropTransform
+                    if (profile.ForcePageSizeCrop)
                     {
-                        Right = (int)((width - (float)pageDimensions.HeightInInches()) * output.HorizontalResolution),
-                        Bottom = (int)((height - (float)pageDimensions.WidthInInches()) * output.VerticalResolution)
-                    }.Perform(result);
-                    // result.SetResolution((float)(output.Width / pageDimensions.HeightInInches()), (float)(output.Height / pageDimensions.WidthInInches()));
+                        result = new CropTransform
+                        {
+                            Right = (int) ((width - (float) pageDimensions.HeightInInches()) * output.HorizontalResolution),
+                            Bottom = (int) ((height - (float) pageDimensions.WidthInInches()) * output.VerticalResolution)
+                        }.Perform(result);
+                    }
+                    else
+                    {
+                        result.SafeSetResolution((float) (output.Width / pageDimensions.HeightInInches()),
+                            (float) (output.Height / pageDimensions.WidthInInches()));
+                    }
                 }
                 else
                 {
-                    result = new CropTransform
+                    if (profile.ForcePageSizeCrop)
                     {
-                        Right = (int)((width - (float)pageDimensions.WidthInInches()) * output.HorizontalResolution),
-                        Bottom = (int)((height - (float)pageDimensions.HeightInInches()) * output.VerticalResolution)
-                    }.Perform(result);
-                    //result.SetResolution((float)(output.Width / pageDimensions.WidthInInches()), (float)(output.Height / pageDimensions.HeightInInches()));
+                        result = new CropTransform
+                        {
+                            Right = (int) ((width - (float) pageDimensions.WidthInInches()) * output.HorizontalResolution),
+                            Bottom = (int) ((height - (float) pageDimensions.HeightInInches()) * output.VerticalResolution)
+                        }.Perform(result);
+                    }
+                    else
+                    {
+                        result.SafeSetResolution((float)(output.Width / pageDimensions.WidthInInches()), (float)(output.Height / pageDimensions.HeightInInches()));
+                    }
                 }
             }
 
             return result;
         }
 
-        public static void PostProcessStep2(ScannedImage image, Bitmap bitmap, ScanProfile profile, ScanParams scanParams, int pageNumber)
+        public void PostProcessStep2(ScannedImage image, Bitmap bitmap, ScanProfile profile, ScanParams scanParams, int pageNumber, bool supportsNativeUI = true)
         {
-            if (!profile.UseNativeUI && profile.BrightnessContrastAfterScan)
+            if (!scanParams.NoThumbnails)
+            {
+                image.SetThumbnail(thumbnailRenderer.RenderThumbnail(bitmap));
+            }
+            if (scanParams.SkipPostProcessing)
+            {
+                return;
+            }
+            if ((!profile.UseNativeUI || !supportsNativeUI) && profile.BrightnessContrastAfterScan)
             {
                 if (profile.Brightness != 0)
                 {
-                    AddTransformAndUpdateThumbnail(image, new BrightnessTransform { Brightness = profile.Brightness });
+                    AddTransformAndUpdateThumbnail(image, ref bitmap, new BrightnessTransform { Brightness = profile.Brightness });
                 }
                 if (profile.Contrast != 0)
                 {
-                    AddTransformAndUpdateThumbnail(image, new TrueContrastTransform { Contrast = profile.Contrast });
+                    AddTransformAndUpdateThumbnail(image, ref bitmap, new TrueContrastTransform { Contrast = profile.Contrast });
                 }
             }
             if (profile.FlipDuplexedPages && pageNumber % 2 == 0)
             {
-                AddTransformAndUpdateThumbnail(image, new RotationTransform(RotateFlipType.Rotate180FlipNone));
+                AddTransformAndUpdateThumbnail(image, ref bitmap, new RotationTransform(RotateFlipType.Rotate180FlipNone));
+            }
+            if (profile.AutoDeskew)
+            {
+                var op = operationFactory.Create<DeskewOperation>();
+                if (op.Start(new[] { image }))
+                {
+                    operationProgress.ShowProgress(op);
+                    op.Wait();
+                }
             }
             if (scanParams.DetectPatchCodes && image.PatchCode == PatchCode.None)
             {
-                IBarcodeReader reader = new BarcodeReader();
-                var barcodeResult = reader.Decode(bitmap);
-                if (barcodeResult != null)
+                image.PatchCode = PatchCodeDetector.Detect(bitmap);
+            }
+        }
+
+        public bool ShouldDoBackgroundOcr(ScanParams scanParams)
+        {
+            bool ocrEnabled = ocrManager.DefaultParams != null;
+            bool afterScanning = appConfigManager.Config.OcrState == OcrState.Enabled && appConfigManager.Config.OcrDefaultAfterScanning
+                                 || appConfigManager.Config.OcrState == OcrState.UserConfig &&
+                                 (userConfigManager.Config.OcrAfterScanning ?? appConfigManager.Config.OcrDefaultAfterScanning);
+            return scanParams.DoOcr ?? (ocrEnabled && afterScanning);
+        }
+
+        public string SaveForBackgroundOcr(Bitmap bitmap, ScanParams scanParams)
+        {
+            if (ShouldDoBackgroundOcr(scanParams))
+            {
+                string tempPath = Path.Combine(Paths.Temp, Path.GetRandomFileName());
+                bitmap.Save(tempPath);
+                return tempPath;
+            }
+            return null;
+        }
+
+        public void RunBackgroundOcr(ScannedImage image, ScanParams scanParams, string tempPath)
+        {
+            if (ShouldDoBackgroundOcr(scanParams))
+            {
+                using (var snapshot = image.Preserve())
                 {
-                    switch (barcodeResult.Text)
+                    if (scanParams.DoOcr == true)
                     {
-                        case "PATCH1":
-                            image.PatchCode = PatchCode.Patch1;
-                            break;
-                        case "PATCH2":
-                            image.PatchCode = PatchCode.Patch2;
-                            break;
-                        case "PATCH3":
-                            image.PatchCode = PatchCode.Patch3;
-                            break;
-                        case "PATCH4":
-                            image.PatchCode = PatchCode.Patch4;
-                            break;
-                        case "PATCH6":
-                            image.PatchCode = PatchCode.Patch6;
-                            break;
-                        case "PATCHT":
-                            image.PatchCode = PatchCode.PatchT;
-                            break;
+                        ocrRequestQueue.QueueForeground(null, snapshot, tempPath, scanParams.OcrParams, scanParams.OcrCancelToken).AssertNoAwait();
+                    }
+                    else
+                    {
+                        ocrRequestQueue.QueueBackground(snapshot, tempPath, scanParams.OcrParams);
                     }
                 }
             }
         }
 
-        private static void AddTransformAndUpdateThumbnail(ScannedImage image, Transform transform)
+        private void AddTransformAndUpdateThumbnail(ScannedImage image, ref Bitmap bitmap, Transform transform)
         {
             image.AddTransform(transform);
-            var thumbnail = image.GetThumbnail(null);
+            var thumbnail = image.GetThumbnail();
             if (thumbnail != null)
             {
-                image.SetThumbnail(transform.Perform(thumbnail));
+                bitmap = transform.Perform(bitmap);
+                image.SetThumbnail(thumbnailRenderer.RenderThumbnail(bitmap));
             }
         }
     }

@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("NAPS2.Core")]
-[assembly: AssemblyCopyright("Copyright © 2009 Pavel Sorejs, Copyright © 2012 Michael Adams, Copyright © 2013 Peter De Leeuw, Copyright © 2012-2015 Ben Olden-Cooligan; Icons from http://www.fatcow.com/free-icons")]
+[assembly: AssemblyCopyright("Copyright 2009, 2012-2018 NAPS2 Contributors; Icons from http://www.fatcow.com/free-icons")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -28,4 +28,4 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("5.3.3.*")]
+[assembly: AssemblyVersion("6.1.2.*")]

@@ -1,26 +1,7 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using NAPS2.Scan.Exceptions;
 using NAPS2.Scan.Images;
@@ -28,10 +9,15 @@ using NAPS2.Scan.Images;
 namespace NAPS2.Scan
 {
     /// <summary>
-    /// An interface for document scanning drivers (e.g. WIA, TWAIN).
+    /// An interface for document scanning drivers (WIA, TWAIN, SANE).
     /// </summary>
     public interface IScanDriver
     {
+        /// <summary>
+        /// Gets a value indicating whether the driver is supported on the current platform.
+        /// </summary>
+        bool IsSupported { get; }
+
         /// <summary>
         /// Sets the profile used by the driver for scanning.
         /// This must be set before calling Scan.
@@ -54,6 +40,11 @@ namespace NAPS2.Scan
         /// Sets the parent window used when creating dialogs. This must be set before calling PromptForDevice or Scan.
         /// </summary>
         IWin32Window DialogParent { set; }
+
+        /// <summary>
+        /// Sets the cancellation token used to cancel an ongoing scan.
+        /// </summary>
+        CancellationToken CancelToken { set; }
 
         /// <summary>
         /// Gets the name used to look up the driver in the IScanDriverFactory.
@@ -81,6 +72,6 @@ namespace NAPS2.Scan
         /// <returns>A list of scanned images.</returns>
         /// <exception cref="ScanDriverException">Throws a ScanDriverException if an error occurs while scanning.</exception>
         /// /// <exception cref="InvalidOperationException">Throws an InvalidOperationException if ScanProfile or DialogParent has not been set.</exception>
-        IEnumerable<ScannedImage> Scan();
+        ScannedImageSource Scan();
     }
 }

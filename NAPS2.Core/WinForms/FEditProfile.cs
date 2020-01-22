@@ -1,32 +1,16 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using NAPS2.ClientServer;
 using NAPS2.Config;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
+using NAPS2.Platform;
 using NAPS2.Scan;
 using NAPS2.Scan.Exceptions;
+using NAPS2.Scan.Sane;
 using NAPS2.Scan.Twain;
 using NAPS2.Scan.Wia;
 using NAPS2.Util;
@@ -43,6 +27,7 @@ namespace NAPS2.WinForms
         private ScanProfile scanProfile;
         private ScanDevice currentDevice;
         private bool isDefault;
+        private bool useProxy;
 
         private int iconID;
         private bool result;
@@ -56,6 +41,10 @@ namespace NAPS2.WinForms
             this.profileNameTracker = profileNameTracker;
             this.appConfigManager = appConfigManager;
             InitializeComponent();
+            btnNetwork.Left = btnChooseDevice.Right + 6;
+            // TODO: Remove this to reenable
+            btnNetwork.Visible = false;
+
             AddEnumItems<ScanHorizontalAlign>(cmbAlign);
             AddEnumItems<ScanBitDepth>(cmbDepth);
             AddEnumItems<ScanDpi>(cmbResolution);
@@ -66,6 +55,10 @@ namespace NAPS2.WinForms
                 var item = (PageSizeListItem)e.ListItem;
                 e.Value = item.Label;
             };
+
+            rdWIA.Visible = PlatformCompat.System.IsWiaDriverSupported;
+            rdTWAIN.Visible = PlatformCompat.System.IsTwainDriverSupported;
+            rdSANE.Visible = PlatformCompat.System.IsSaneDriverSupported;
         }
 
         protected override void OnLoad(object sender, EventArgs e)
@@ -80,6 +73,7 @@ namespace NAPS2.WinForms
                 CurrentDevice = ScanProfile.Device;
             }
             isDefault = ScanProfile.IsDefault;
+            useProxy = ScanProfile.DriverName == ProxiedScanDriver.DRIVER_NAME;
             iconID = ScanProfile.IconID;
 
             cmbSource.SelectedIndex = (int)ScanProfile.PaperSource;
@@ -95,7 +89,7 @@ namespace NAPS2.WinForms
             cbAutoSave.Checked = ScanProfile.EnableAutoSave;
 
             // The setter updates the driver selection checkboxes
-            DeviceDriverName = ScanProfile.DriverName;
+            DeviceDriverName = useProxy ? ScanProfile.ProxyDriverName : ScanProfile.DriverName;
 
             rdbNative.Checked = ScanProfile.UseNativeUI;
             rdbConfig.Checked = !ScanProfile.UseNativeUI;
@@ -107,9 +101,9 @@ namespace NAPS2.WinForms
 
             linkAutoSaveSettings.Location = new Point(cbAutoSave.Right, linkAutoSaveSettings.Location.Y);
             new LayoutManager(this)
-                .Bind(txtName, txtDevice, panel1, panel2)
+                .Bind(txtName, txtDevice, panelUI, panel2)
                     .WidthToForm()
-                .Bind(pctIcon, btnChooseDevice, btnOK, btnCancel)
+                .Bind(pctIcon, btnChooseDevice, btnNetwork, btnOK, btnCancel)
                     .RightToForm()
                 .Bind(cmbAlign, cmbDepth, cmbPage, cmbResolution, cmbScale, cmbSource, trBrightness, trContrast, rdbConfig, rdbNative)
                     .WidthTo(() => Width / 2)
@@ -186,39 +180,43 @@ namespace NAPS2.WinForms
             cmbPage.SelectedIndex = cmbPage.Items.Count - 2;
         }
 
-        public bool Result
-        {
-            get { return result; }
-        }
+        public bool Result => result;
 
         public ScanProfile ScanProfile
         {
-            get { return scanProfile; }
-            set { scanProfile = value.Clone(); }
+            get => scanProfile;
+            set => scanProfile = value.Clone();
         }
 
         private string DeviceDriverName
         {
-            get
-            {
-                return rdTWAIN.Checked ? TwainScanDriver.DRIVER_NAME : WiaScanDriver.DRIVER_NAME;
-            }
+            get => rdTWAIN.Checked ? TwainScanDriver.DRIVER_NAME
+                 : rdSANE.Checked  ? SaneScanDriver.DRIVER_NAME
+                                   : WiaScanDriver.DRIVER_NAME;
             set
             {
                 if (value == TwainScanDriver.DRIVER_NAME)
                 {
                     rdTWAIN.Checked = true;
                 }
-                else
+                else if (value == SaneScanDriver.DRIVER_NAME)
+                {
+                    rdSANE.Checked = true;
+                }
+                else if (value == WiaScanDriver.DRIVER_NAME || PlatformCompat.System.IsWiaDriverSupported)
                 {
                     rdWIA.Checked = true;
+                }
+                else
+                {
+                    rdSANE.Checked = true;
                 }
             }
         }
 
         public ScanDevice CurrentDevice
         {
-            get { return currentDevice; }
+            get => currentDevice;
             set
             {
                 currentDevice = value;
@@ -260,7 +258,9 @@ namespace NAPS2.WinForms
 
         private void btnChooseDevice_Click(object sender, EventArgs e)
         {
-            ChooseDevice(DeviceDriverName);
+            ScanProfile.DriverName = useProxy ? ProxiedScanDriver.DRIVER_NAME : DeviceDriverName;
+            ScanProfile.ProxyDriverName = useProxy ? DeviceDriverName : null;
+            ChooseDevice(ScanProfile.DriverName);
         }
 
         private void SaveSettings()
@@ -284,7 +284,9 @@ namespace NAPS2.WinForms
 
                 Device = CurrentDevice,
                 IsDefault = isDefault,
-                DriverName = DeviceDriverName,
+                DriverName = useProxy ? ProxiedScanDriver.DRIVER_NAME : DeviceDriverName,
+                ProxyConfig = ScanProfile.ProxyConfig,
+                ProxyDriverName = useProxy ? DeviceDriverName : null,
                 DisplayName = txtName.Text,
                 IconID = iconID,
                 MaxQuality = ScanProfile.MaxQuality,
@@ -305,8 +307,14 @@ namespace NAPS2.WinForms
                 AutoSaveSettings = ScanProfile.AutoSaveSettings,
                 Quality = ScanProfile.Quality,
                 BrightnessContrastAfterScan = ScanProfile.BrightnessContrastAfterScan,
+                AutoDeskew = ScanProfile.AutoDeskew,
                 WiaOffsetWidth = ScanProfile.WiaOffsetWidth,
+                WiaRetryOnFailure = ScanProfile.WiaRetryOnFailure,
+                WiaDelayBetweenScans = ScanProfile.WiaDelayBetweenScans,
+                WiaDelayBetweenScansSeconds = ScanProfile.WiaDelayBetweenScansSeconds,
+                WiaVersion = ScanProfile.WiaVersion,
                 ForcePageSize = ScanProfile.ForcePageSize,
+                ForcePageSizeCrop = ScanProfile.ForcePageSizeCrop,
                 FlipDuplexedPages = ScanProfile.FlipDuplexedPages,
                 TwainImpl = ScanProfile.TwainImpl,
 
@@ -350,13 +358,14 @@ namespace NAPS2.WinForms
             if (!suppressChangeEvent)
             {
                 suppressChangeEvent = true;
-                
+
+                bool canUseNativeUi = DeviceDriverName != SaneScanDriver.DRIVER_NAME && !useProxy;
                 bool locked = ScanProfile.IsLocked;
                 bool deviceLocked = ScanProfile.IsDeviceLocked;
-                bool settingsEnabled = !locked && rdbConfig.Checked;
+                bool settingsEnabled = !locked && (rdbConfig.Checked || !canUseNativeUi);
 
                 txtName.Enabled = !locked;
-                rdWIA.Enabled = rdTWAIN.Enabled = !locked;
+                rdWIA.Enabled = rdTWAIN.Enabled = rdSANE.Enabled = !locked;
                 txtDevice.Enabled = !deviceLocked;
                 btnChooseDevice.Enabled = !deviceLocked;
                 rdbConfig.Enabled = rdbNative.Enabled = !locked;
@@ -377,13 +386,17 @@ namespace NAPS2.WinForms
 
                 btnAdvanced.Enabled = !locked;
 
+                ConditionalControls.UnlockHeight(this);
+                ConditionalControls.SetVisible(panelUI, canUseNativeUi, 20);
+                ConditionalControls.LockHeight(this);
+
                 suppressChangeEvent = false;
             }
         }
 
-        private void rdWIA_CheckedChanged(object sender, EventArgs e)
+        private void rdDriver_CheckedChanged(object sender, EventArgs e)
         {
-            if (!suppressChangeEvent)
+            if (((RadioButton)sender).Checked && !suppressChangeEvent)
             {
                 ScanProfile.Device = null;
                 CurrentDevice = null;
@@ -393,8 +406,7 @@ namespace NAPS2.WinForms
 
         private void txtBrightness_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtBrightness.Text, out value))
+            if (int.TryParse(txtBrightness.Text, out int value))
             {
                 if (value >= trBrightness.Minimum && value <= trBrightness.Maximum)
                 {
@@ -410,8 +422,7 @@ namespace NAPS2.WinForms
 
         private void txtContrast_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtContrast.Text, out value))
+            if (int.TryParse(txtContrast.Text, out int value))
             {
                 if (value >= trContrast.Minimum && value <= trContrast.Maximum)
                 {
@@ -508,6 +519,19 @@ namespace NAPS2.WinForms
             public string CustomName { get; set; }
 
             public PageDimensions CustomDimens { get; set; }
+        }
+
+        private void btnNetwork_Click(object sender, EventArgs e)
+        {
+            var form = FormFactory.Create<FProxyConfig>();
+            form.ProxyConfig = ScanProfile.ProxyConfig;
+            form.UseProxy = useProxy;
+            if (form.ShowDialog() == DialogResult.OK)
+            {
+                ScanProfile.ProxyConfig = form.ProxyConfig;
+                useProxy = form.UseProxy;
+                UpdateEnabledControls();
+            }
         }
     }
 }

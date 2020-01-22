@@ -77,14 +77,17 @@ namespace NAPS2.WinForms
             this.tsView = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator6 = new System.Windows.Forms.ToolStripSeparator();
             this.tsCrop = new System.Windows.Forms.ToolStripMenuItem();
-            this.tsBrightness = new System.Windows.Forms.ToolStripMenuItem();
-            this.tsContrast = new System.Windows.Forms.ToolStripMenuItem();
+            this.tsBrightnessContrast = new System.Windows.Forms.ToolStripMenuItem();
+            this.tsHueSaturation = new System.Windows.Forms.ToolStripMenuItem();
+            this.tsBlackWhite = new System.Windows.Forms.ToolStripMenuItem();
+            this.tsSharpen = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.tsReset = new System.Windows.Forms.ToolStripMenuItem();
             this.tsdRotate = new System.Windows.Forms.ToolStripDropDownButton();
             this.tsRotateLeft = new System.Windows.Forms.ToolStripMenuItem();
             this.tsRotateRight = new System.Windows.Forms.ToolStripMenuItem();
             this.tsFlip = new System.Windows.Forms.ToolStripMenuItem();
+            this.tsDeskew = new System.Windows.Forms.ToolStripMenuItem();
             this.tsCustomRotation = new System.Windows.Forms.ToolStripMenuItem();
             this.tsMove = new NAPS2.WinForms.ToolStripDoubleButton();
             this.tsdReorder = new System.Windows.Forms.ToolStripDropDownButton();
@@ -129,8 +132,8 @@ namespace NAPS2.WinForms
             // 
             // btnZoomIn
             // 
-            this.btnZoomIn.BackColor = System.Drawing.Color.White;
             resources.ApplyResources(this.btnZoomIn, "btnZoomIn");
+            this.btnZoomIn.BackColor = System.Drawing.Color.White;
             this.btnZoomIn.Image = global::NAPS2.Icons.zoom_in;
             this.btnZoomIn.Name = "btnZoomIn";
             this.btnZoomIn.UseVisualStyleBackColor = false;
@@ -138,8 +141,8 @@ namespace NAPS2.WinForms
             // 
             // btnZoomOut
             // 
-            this.btnZoomOut.BackColor = System.Drawing.Color.White;
             resources.ApplyResources(this.btnZoomOut, "btnZoomOut");
+            this.btnZoomOut.BackColor = System.Drawing.Color.White;
             this.btnZoomOut.Image = global::NAPS2.Icons.zoom_out;
             this.btnZoomOut.Name = "btnZoomOut";
             this.btnZoomOut.UseVisualStyleBackColor = false;
@@ -158,6 +161,7 @@ namespace NAPS2.WinForms
             this.thumbnailList1.ContextMenuStrip = this.contextMenuStrip;
             resources.ApplyResources(this.thumbnailList1, "thumbnailList1");
             this.thumbnailList1.Name = "thumbnailList1";
+            this.thumbnailList1.ThumbnailRenderer = null;
             this.thumbnailList1.ThumbnailSize = new System.Drawing.Size(128, 128);
             this.thumbnailList1.UseCompatibleStateImageBehavior = false;
             this.thumbnailList1.ItemActivate += new System.EventHandler(this.thumbnailList1_ItemActivate);
@@ -252,6 +256,7 @@ namespace NAPS2.WinForms
             this.tsAbout});
             this.tStrip.Name = "tStrip";
             this.tStrip.ShowItemToolTips = false;
+            this.tStrip.TabStop = true;
             this.tStrip.DockChanged += new System.EventHandler(this.tStrip_DockChanged);
             // 
             // tsScan
@@ -442,8 +447,10 @@ namespace NAPS2.WinForms
             this.tsView,
             this.toolStripSeparator6,
             this.tsCrop,
-            this.tsBrightness,
-            this.tsContrast,
+            this.tsBrightnessContrast,
+            this.tsHueSaturation,
+            this.tsBlackWhite,
+            this.tsSharpen,
             this.toolStripSeparator7,
             this.tsReset});
             this.tsdImage.Image = global::NAPS2.Icons.picture_edit;
@@ -470,19 +477,33 @@ namespace NAPS2.WinForms
             this.tsCrop.Name = "tsCrop";
             this.tsCrop.Click += new System.EventHandler(this.tsCrop_Click);
             // 
-            // tsBrightness
+            // tsBrightnessContrast
             // 
-            this.tsBrightness.Image = global::NAPS2.Icons.weather_sun;
-            resources.ApplyResources(this.tsBrightness, "tsBrightness");
-            this.tsBrightness.Name = "tsBrightness";
-            this.tsBrightness.Click += new System.EventHandler(this.tsBrightness_Click);
+            this.tsBrightnessContrast.Image = global::NAPS2.Icons.contrast_with_sun;
+            resources.ApplyResources(this.tsBrightnessContrast, "tsBrightnessContrast");
+            this.tsBrightnessContrast.Name = "tsBrightnessContrast";
+            this.tsBrightnessContrast.Click += new System.EventHandler(this.tsBrightnessContrast_Click);
             // 
-            // tsContrast
+            // tsHueSaturation
             // 
-            this.tsContrast.Image = global::NAPS2.Icons.contrast;
-            resources.ApplyResources(this.tsContrast, "tsContrast");
-            this.tsContrast.Name = "tsContrast";
-            this.tsContrast.Click += new System.EventHandler(this.tsContrast_Click);
+            this.tsHueSaturation.Image = global::NAPS2.Icons.color_management;
+            resources.ApplyResources(this.tsHueSaturation, "tsHueSaturation");
+            this.tsHueSaturation.Name = "tsHueSaturation";
+            this.tsHueSaturation.Click += new System.EventHandler(this.tsHueSaturation_Click);
+            // 
+            // tsBlackWhite
+            // 
+            this.tsBlackWhite.Image = global::NAPS2.Icons.contrast_high;
+            resources.ApplyResources(this.tsBlackWhite, "tsBlackWhite");
+            this.tsBlackWhite.Name = "tsBlackWhite";
+            this.tsBlackWhite.Click += new System.EventHandler(this.tsBlackWhite_Click);
+            // 
+            // tsSharpen
+            // 
+            this.tsSharpen.Image = global::NAPS2.Icons.sharpen;
+            resources.ApplyResources(this.tsSharpen, "tsSharpen");
+            this.tsSharpen.Name = "tsSharpen";
+            this.tsSharpen.Click += new System.EventHandler(this.tsSharpen_Click);
             // 
             // toolStripSeparator7
             // 
@@ -501,6 +522,7 @@ namespace NAPS2.WinForms
             this.tsRotateLeft,
             this.tsRotateRight,
             this.tsFlip,
+            this.tsDeskew,
             this.tsCustomRotation});
             this.tsdRotate.Image = global::NAPS2.Icons.arrow_rotate_anticlockwise;
             resources.ApplyResources(this.tsdRotate, "tsdRotate");
@@ -529,6 +551,12 @@ namespace NAPS2.WinForms
             this.tsFlip.Name = "tsFlip";
             this.tsFlip.Click += new System.EventHandler(this.tsFlip_Click);
             // 
+            // tsDeskew
+            // 
+            resources.ApplyResources(this.tsDeskew, "tsDeskew");
+            this.tsDeskew.Name = "tsDeskew";
+            this.tsDeskew.Click += new System.EventHandler(this.tsDeskew_Click);
+            // 
             // tsCustomRotation
             // 
             this.tsCustomRotation.Name = "tsCustomRotation";
@@ -537,15 +565,15 @@ namespace NAPS2.WinForms
             // 
             // tsMove
             // 
-            this.tsMove.ImageFirst = global::NAPS2.Icons.arrow_up_small;
-            this.tsMove.ImageSecond = global::NAPS2.Icons.arrow_down_small;
+            this.tsMove.FirstImage = global::NAPS2.Icons.arrow_up_small;
+            resources.ApplyResources(this.tsMove, "tsMove");
             this.tsMove.MaxTextWidth = 80;
             this.tsMove.Name = "tsMove";
             this.tsMove.Padding = new System.Windows.Forms.Padding(5, 0, 5, 0);
-            resources.ApplyResources(this.tsMove, "tsMove");
+            this.tsMove.SecondImage = global::NAPS2.Icons.arrow_down_small;
             this.tsMove.TextDirection = System.Windows.Forms.ToolStripTextDirection.Horizontal;
-            this.tsMove.ClickFirst += new System.EventHandler(this.tsMove_ClickFirst);
-            this.tsMove.ClickSecond += new System.EventHandler(this.tsMove_ClickSecond);
+            this.tsMove.FirstClick += new System.EventHandler(this.tsMove_FirstClick);
+            this.tsMove.SecondClick += new System.EventHandler(this.tsMove_SecondClick);
             // 
             // tsdReorder
             // 
@@ -723,8 +751,7 @@ namespace NAPS2.WinForms
         private System.Windows.Forms.ToolStripDropDownButton tsdImage;
         private System.Windows.Forms.ToolStripMenuItem tsView;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator6;
-        private System.Windows.Forms.ToolStripMenuItem tsBrightness;
-        private System.Windows.Forms.ToolStripMenuItem tsContrast;
+        private System.Windows.Forms.ToolStripMenuItem tsBrightnessContrast;
         private System.Windows.Forms.ToolStripMenuItem tsCrop;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator7;
         private System.Windows.Forms.ToolStripMenuItem tsReset;
@@ -748,6 +775,10 @@ namespace NAPS2.WinForms
         private System.Windows.Forms.Button btnZoomMouseCatcher;
         private System.Windows.Forms.ToolStripMenuItem ctxPaste;
         private System.Windows.Forms.ToolStripButton tsPrint;
+        private System.Windows.Forms.ToolStripMenuItem tsDeskew;
+        private System.Windows.Forms.ToolStripMenuItem tsSharpen;
+        private System.Windows.Forms.ToolStripMenuItem tsHueSaturation;
+        private System.Windows.Forms.ToolStripMenuItem tsBlackWhite;
     }
 }
 

@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +5,7 @@ using NAPS2.Config;
 using NAPS2.Scan;
 using NAPS2.Scan.Twain;
 using NAPS2.Scan.Wia;
+using NAPS2.Scan.Wia.Native;
 
 namespace NAPS2.WinForms
 {
@@ -37,13 +18,11 @@ namespace NAPS2.WinForms
             this.appConfigManager = appConfigManager;
             InitializeComponent();
 
-            cmbTwainImpl.Format += (sender, e) => e.Value = ((Enum) e.ListItem).Description();
-            cmbTwainImpl.Items.Add(TwainImpl.Default);
-            cmbTwainImpl.Items.Add(TwainImpl.OldDsm);
-            cmbTwainImpl.Items.Add(TwainImpl.Legacy);
-            if (Environment.Is64BitProcess)
+            AddEnumItems<WiaVersion>(cmbWiaVersion);
+            AddEnumItems<TwainImpl>(cmbTwainImpl);
+            if (!Environment.Is64BitProcess)
             {
-                cmbTwainImpl.Items.Add(TwainImpl.X64);
+                cmbTwainImpl.Items.Remove(TwainImpl.X64);
             }
         }
 
@@ -66,13 +45,13 @@ namespace NAPS2.WinForms
             tbImageQuality.Value = scanProfile.Quality;
             txtImageQuality.Text = scanProfile.Quality.ToString("G");
             cbBrightnessContrastAfterScan.Checked = scanProfile.BrightnessContrastAfterScan;
+            cbAutoDeskew.Checked = scanProfile.AutoDeskew;
             cbWiaOffsetWidth.Checked = scanProfile.WiaOffsetWidth;
+            cmbWiaVersion.SelectedIndex = (int)scanProfile.WiaVersion;
             cbForcePageSize.Checked = scanProfile.ForcePageSize;
+            cbForcePageSizeCrop.Checked = scanProfile.ForcePageSizeCrop;
             cbFlipDuplex.Checked = scanProfile.FlipDuplexedPages;
-            if (scanProfile.TwainImpl != TwainImpl.X64 || Environment.Is64BitProcess)
-            {
-                cmbTwainImpl.SelectedIndex = (int) scanProfile.TwainImpl;
-            }
+            cmbTwainImpl.SelectedIndex = (int)scanProfile.TwainImpl;
             cbExcludeBlankPages.Checked = scanProfile.ExcludeBlankPages;
             tbWhiteThreshold.Value = scanProfile.BlankPageWhiteThreshold;
             txtWhiteThreshold.Text = scanProfile.BlankPageWhiteThreshold.ToString("G");
@@ -84,6 +63,7 @@ namespace NAPS2.WinForms
         {
             cmbTwainImpl.Enabled = ScanProfile.DriverName == TwainScanDriver.DRIVER_NAME;
             cbWiaOffsetWidth.Enabled = ScanProfile.DriverName == WiaScanDriver.DRIVER_NAME;
+            cmbWiaVersion.Enabled = ScanProfile.DriverName == WiaScanDriver.DRIVER_NAME;
             tbImageQuality.Enabled = !cbHighQuality.Checked;
             txtImageQuality.Enabled = !cbHighQuality.Checked;
             tbWhiteThreshold.Enabled = cbExcludeBlankPages.Checked && ScanProfile.BitDepth != ScanBitDepth.BlackWhite;
@@ -99,12 +79,18 @@ namespace NAPS2.WinForms
             ScanProfile.Quality = tbImageQuality.Value;
             ScanProfile.MaxQuality = cbHighQuality.Checked;
             ScanProfile.BrightnessContrastAfterScan = cbBrightnessContrastAfterScan.Checked;
+            ScanProfile.AutoDeskew = cbAutoDeskew.Checked;
             ScanProfile.WiaOffsetWidth = cbWiaOffsetWidth.Checked;
+            if (cmbWiaVersion.SelectedIndex != -1)
+            {
+                ScanProfile.WiaVersion = (WiaVersion)cmbWiaVersion.SelectedIndex;
+            }
             ScanProfile.ForcePageSize = cbForcePageSize.Checked;
+            ScanProfile.ForcePageSizeCrop = cbForcePageSizeCrop.Checked;
             ScanProfile.FlipDuplexedPages = cbFlipDuplex.Checked;
             if (cmbTwainImpl.SelectedIndex != -1)
             {
-                ScanProfile.TwainImpl = (TwainImpl) cmbTwainImpl.SelectedIndex;
+                ScanProfile.TwainImpl = (TwainImpl)cmbTwainImpl.SelectedIndex;
             }
             ScanProfile.ExcludeBlankPages = cbExcludeBlankPages.Checked;
             ScanProfile.BlankPageWhiteThreshold = tbWhiteThreshold.Value;
@@ -129,8 +115,7 @@ namespace NAPS2.WinForms
 
         private void txtImageQuality_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtImageQuality.Text, out value))
+            if (int.TryParse(txtImageQuality.Text, out int value))
             {
                 if (value >= tbImageQuality.Minimum && value <= tbImageQuality.Maximum)
                 {
@@ -156,8 +141,7 @@ namespace NAPS2.WinForms
 
         private void txtWhiteThreshold_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtWhiteThreshold.Text, out value))
+            if (int.TryParse(txtWhiteThreshold.Text, out int value))
             {
                 if (value >= tbWhiteThreshold.Minimum && value <= tbWhiteThreshold.Maximum)
                 {
@@ -173,8 +157,7 @@ namespace NAPS2.WinForms
 
         private void txtCoverageThreshold_TextChanged(object sender, EventArgs e)
         {
-            int value;
-            if (int.TryParse(txtCoverageThreshold.Text, out value))
+            if (int.TryParse(txtCoverageThreshold.Text, out int value))
             {
                 if (value >= tbCoverageThreshold.Minimum && value <= tbCoverageThreshold.Maximum)
                 {

@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Forms;
 using NAPS2.Util;
 
@@ -26,10 +24,7 @@ namespace NAPS2.WinForms
             InitializeComponent();
         }
 
-        private int EdgeSize
-        {
-            get { return Font.Height; }
-        }
+        private int EdgeSize => Font.Height;
 
         private void InitializeComponent()
         {

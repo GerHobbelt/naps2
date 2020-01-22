@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -26,9 +6,13 @@ using System.Linq;
 using System.Xml.Serialization;
 using NAPS2.ImportExport;
 using NAPS2.Lang.Resources;
+using NAPS2.Scan.Wia.Native;
 
 namespace NAPS2.Scan
 {
+    /// <summary>
+    /// A class that stores user configuration for scanning, including device selection and other options.
+    /// </summary>
     [Serializable]
     public class ScanProfile
     {
@@ -45,6 +29,7 @@ namespace NAPS2.Scan
             Quality = 75;
             BlankPageWhiteThreshold = 70;
             BlankPageCoverageThreshold = 25;
+            WiaDelayBetweenScansSeconds = 2.0;
         }
 
         public ScanProfile Clone()
@@ -66,6 +51,10 @@ namespace NAPS2.Scan
         public ScanDevice Device { get; set; }
 
         public string DriverName { get; set; }
+
+        public ScanProxyConfig ProxyConfig { get; set; }
+
+        public string ProxyDriverName { get; set; }
 
         public string DisplayName { get; set; }
 
@@ -105,9 +94,13 @@ namespace NAPS2.Scan
 
         public int Quality { get; set; }
 
+        public bool AutoDeskew { get; set; }
+
         public bool BrightnessContrastAfterScan { get; set; }
 
         public bool ForcePageSize { get; set; }
+
+        public bool ForcePageSizeCrop { get; set; }
 
         public TwainImpl TwainImpl { get; set; }
 
@@ -119,9 +112,32 @@ namespace NAPS2.Scan
 
         public bool WiaOffsetWidth { get; set; }
 
+        public bool WiaRetryOnFailure { get; set; }
+
+        public bool WiaDelayBetweenScans { get; set; }
+
+        public double WiaDelayBetweenScansSeconds { get; set; }
+
+        public WiaVersion WiaVersion { get; set; }
+
         public bool FlipDuplexedPages { get; set; }
+
+        public KeyValueScanOptions KeyValueOptions { get; set; }
     }
 
+    [Serializable]
+    public class ScanProxyConfig
+    {
+        public string Name { get; set; }
+
+        public string Ip { get; set; }
+
+        public int? Port { get; set; }
+    }
+
+    /// <summary>
+    /// User configuration for the Auto Save feature, which saves to a file immediately after scanning.
+    /// </summary>
     [Serializable]
     public class AutoSaveSettings
     {
@@ -130,22 +146,26 @@ namespace NAPS2.Scan
             Separator = SaveSeparator.FilePerPage;
         }
 
-        internal AutoSaveSettings Clone()
-        {
-            return (AutoSaveSettings) MemberwiseClone();
-        }
+        internal AutoSaveSettings Clone() => (AutoSaveSettings) MemberwiseClone();
 
         public string FilePath { get; set; }
+
+        public bool PromptForFilePath { get; set; }
 
         public bool ClearImagesAfterSaving { get; set; }
 
         public SaveSeparator Separator { get; set; }
     }
 
+    /// <summary>
+    /// The type of TWAIN driver implementation (this option is provided for compatibility).
+    /// </summary>
     public enum TwainImpl
     {
         [LocalizedDescription(typeof(SettingsResources), "TwainImpl_Default")]
         Default,
+        [LocalizedDescription(typeof(SettingsResources), "TwainImpl_MemXfer")]
+        MemXfer,
         [LocalizedDescription(typeof(SettingsResources), "TwainImpl_OldDsm")]
         OldDsm,
         [LocalizedDescription(typeof(SettingsResources), "TwainImpl_Legacy")]
@@ -154,6 +174,9 @@ namespace NAPS2.Scan
         X64
     }
 
+    /// <summary>
+    /// The physical source of the scanned image (flatbed, feeder).
+    /// </summary>
     public enum ScanSource
     {
         [LocalizedDescription(typeof(SettingsResources), "Source_Glass")]
@@ -164,6 +187,9 @@ namespace NAPS2.Scan
         Duplex
     }
 
+    /// <summary>
+    /// The color depth used for scanning.
+    /// </summary>
     public enum ScanBitDepth
     {
         [LocalizedDescription(typeof(SettingsResources), "BitDepth_24Color")]
@@ -174,6 +200,9 @@ namespace NAPS2.Scan
         BlackWhite
     }
 
+    /// <summary>
+    /// The resolution used for scanning.
+    /// </summary>
     public enum ScanDpi
     {
         [LocalizedDescription(typeof(SettingsResources), "Dpi_100")]
@@ -194,6 +223,9 @@ namespace NAPS2.Scan
         Dpi1200
     }
 
+    /// <summary>
+    /// The physical location of the page relative to the scan area.
+    /// </summary>
     public enum ScanHorizontalAlign
     {
         [LocalizedDescription(typeof(SettingsResources), "HorizontalAlign_Left")]
@@ -204,6 +236,9 @@ namespace NAPS2.Scan
         Right
     }
 
+    /// <summary>
+    /// A scale factor used to shrink the scanned image.
+    /// </summary>
     public enum ScanScale
     {
         [LocalizedDescription(typeof(SettingsResources), "Scale_1_1")]
@@ -216,6 +251,9 @@ namespace NAPS2.Scan
         OneToEight
     }
 
+    /// <summary>
+    /// The page size used for scanning.
+    /// </summary>
     public enum ScanPageSize
     {
         [LocalizedDescription(typeof(SettingsResources), "PageSize_Letter")]
@@ -243,6 +281,9 @@ namespace NAPS2.Scan
         Custom
     }
 
+    /// <summary>
+    /// Configuration for a particular page size.
+    /// </summary>
     [Serializable]
     public class PageDimensions
     {
@@ -254,7 +295,7 @@ namespace NAPS2.Scan
 
         public override bool Equals(Object obj)
         {
-            return obj is PageDimensions && this == (PageDimensions)obj;
+            return obj is PageDimensions pageDimens && this == pageDimens;
         }
 
         public override int GetHashCode()
@@ -275,12 +316,12 @@ namespace NAPS2.Scan
             return x.Width == y.Width && x.Height == y.Height && x.Unit == y.Unit;
         }
 
-        public static bool operator !=(PageDimensions x, PageDimensions y)
-        {
-            return !(x == y);
-        }
+        public static bool operator !=(PageDimensions x, PageDimensions y) => !(x == y);
     }
 
+    /// <summary>
+    /// Configuration for a user-created custom page size.
+    /// </summary>
     public class NamedPageSize
     {
         public string Name { get; set; }
@@ -288,6 +329,9 @@ namespace NAPS2.Scan
         public PageDimensions Dimens { get; set; }
     }
 
+    /// <summary>
+    /// Helper attribute used to assign physical dimensions to the ScanPageSize enum.
+    /// </summary>
     public class PageDimensionsAttribute : Attribute
     {
         public PageDimensionsAttribute(string width, string height, PageSizeUnit unit)
@@ -300,9 +344,12 @@ namespace NAPS2.Scan
             };
         }
 
-        public PageDimensions PageDimensions { get; private set; }
+        public PageDimensions PageDimensions { get; }
     }
 
+    /// <summary>
+    /// The unit used for Width and Height in PageDimensions.
+    /// </summary>
     public enum PageSizeUnit
     {
         [LocalizedDescription(typeof(SettingsResources), "PageSizeUnit_Inch")]
@@ -313,8 +360,26 @@ namespace NAPS2.Scan
         Millimetre
     }
 
+    /// <summary>
+    /// Helper extensions that get additional information from scan-related objects and enumerations.
+    /// </summary>
     public static class ScanEnumExtensions
     {
+        public static decimal WidthInMm(this PageDimensions pageDimensions)
+        {
+            switch (pageDimensions.Unit)
+            {
+                case PageSizeUnit.Inch:
+                    return pageDimensions.Width * 25.4m;
+                case PageSizeUnit.Centimetre:
+                    return pageDimensions.Width * 10;
+                case PageSizeUnit.Millimetre:
+                    return pageDimensions.Width;
+                default:
+                    throw new ArgumentException();
+            }
+        }
+
         public static decimal WidthInInches(this PageDimensions pageDimensions)
         {
             switch (pageDimensions.Unit)
@@ -333,6 +398,21 @@ namespace NAPS2.Scan
         public static int WidthInThousandthsOfAnInch(this PageDimensions pageDimensions)
         {
             return (int)(WidthInInches(pageDimensions) * 1000);
+        }
+
+        public static decimal HeightInMm(this PageDimensions pageDimensions)
+        {
+            switch (pageDimensions.Unit)
+            {
+                case PageSizeUnit.Inch:
+                    return pageDimensions.Height * 25.4m;
+                case PageSizeUnit.Centimetre:
+                    return pageDimensions.Height * 10;
+                case PageSizeUnit.Millimetre:
+                    return pageDimensions.Height;
+                default:
+                    throw new ArgumentException();
+            }
         }
 
         public static decimal HeightInInches(this PageDimensions pageDimensions)

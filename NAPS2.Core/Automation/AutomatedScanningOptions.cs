@@ -1,24 +1,4 @@
-﻿/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using CommandLine;
@@ -35,8 +15,11 @@ namespace NAPS2.Automation
         public string OutputPath { get; set; }
 
         [Option('a', "autosave", HelpText = "Use the Auto Save settings from the selected profile." +
-                                          " Only works if the profile has Auto Save enabled.")]
+                                            " Only works if the profile has Auto Save enabled.")]
         public bool AutoSave { get; set; }
+
+        [Option("install", HelpText = "Use this option to download and install optional components (e.g. \"ocr-eng\", \"generic-import\").")]
+        public string Install { get; set; }
 
         [Option('p', "profile", HelpText = "The name of the profile to use for scanning." +
                                            " If not specified, the most-recently-used profile from the GUI is selected.")]
@@ -44,13 +27,17 @@ namespace NAPS2.Automation
 
         [Option('i', "import", HelpText = "The name and path of one or more pdf/image files to import." +
                                           " Imported files are prepended to the output in the order they are specified." +
-                                          " Multiple files are separated by a semicolon (\";\").")]
+                                          " Multiple files are separated by a semicolon (\";\")." +
+                                          " Slice notation can be used to only import some pages (e.g. \"[0]\" for the first page or \"[:2]\" for the first two pages).")]
         public string ImportPath { get; set; }
 
         [Option("importpassword", HelpText = "The password to use to import one or more encrypted PDF files.")]
         public string ImportPassword { get; set; }
+        
+        [Option("progress", HelpText = "Display a graphical window for scanning progress.")]
+        public bool Progress { get; set; }
 
-        [Option('v', "verbose", HelpText = "Display progress information." +
+        [Option('v', "verbose", HelpText = "Display progress information in the console." +
                                            " If not specified, no output is displayed if the scan is successful.")]
         public bool Verbose { get; set; }
 
@@ -70,7 +57,7 @@ namespace NAPS2.Automation
         #endregion
 
         #region Order Options
-        
+
         [Option("interleave", HelpText = "Interleave pages before saving.")]
         public bool Interleave { get; set; }
 
@@ -85,6 +72,22 @@ namespace NAPS2.Automation
 
         [Option("reverse", HelpText = "Reverse pages before saving.")]
         public bool Reverse { get; set; }
+
+        #endregion
+
+        #region Split Options
+
+        [Option("split", HelpText = "Split the pages into individual PDF/TIFF files.")]
+        public bool Split { get; set; }
+
+        [Option("splitscans", HelpText = "Split the pages into multiple PDF/TIFF files, one for each scan.")]
+        public bool SplitScans { get; set; }
+
+        [Option("splitpatcht", HelpText = "Split the pages into multiple PDF/TIFF files, separating by Patch-T.")]
+        public bool SplitPatchT { get; set; }
+
+        [Option("splitsize", HelpText = "Split the pages into multiple PDF/TIFF files with the given number of pages per file.")]
+        public int SplitSize { get; set; }
 
         #endregion
 
@@ -111,6 +114,9 @@ namespace NAPS2.Automation
         [Option("usesavedencryptconfig", HelpText = "Use the encryption configured in the GUI, if any, for the generated PDF.")]
         public bool UseSavedEncryptConfig { get; set; }
 
+        [Option("pdfcompat", HelpText = "The standard to use for the generated PDF. Possible values: default, A1-b, A2-b, A3-b, A3-u")]
+        public string PdfCompat { get; set; }
+
         #endregion
 
         #region OCR Options
@@ -134,12 +140,12 @@ namespace NAPS2.Automation
         public string EmailFileName { get; set; }
 
         [Option("subject", HelpText = "The email message's subject." +
-            //" You can use \"<date>\" and/or \"<time>\" to insert the date/time of the scan." +
+                                      //" You can use \"<date>\" and/or \"<time>\" to insert the date/time of the scan." +
                                       " Requires -e/--email.")]
         public string EmailSubject { get; set; }
 
         [Option("body", HelpText = "The email message's body text." +
-            //" You can use \"<date>\" and/or \"<time>\" to insert the date/time of the scan." +
+                                   //" You can use \"<date>\" and/or \"<time>\" to insert the date/time of the scan." +
                                    " Requires -e/--email.")]
         public string EmailBody { get; set; }
 
@@ -174,6 +180,9 @@ namespace NAPS2.Automation
         [Option("jpegquality", DefaultValue = 75, HelpText = "The quality of saved JPEG files (0-100, default 75).")]
         public int JpegQuality { get; set; }
 
+        [Option("tiffcomp", HelpText = "The compression to use for TIFF files. Possible values: auto, lzw, ccitt4, none")]
+        public string TiffComp { get; set; }
+        
         #endregion
     }
 }

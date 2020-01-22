@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,14 +5,27 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
+using NAPS2.Config;
 using NAPS2.Lang.Resources;
+using NAPS2.Logging;
+using NAPS2.Update;
+using NAPS2.Util;
 
 namespace NAPS2.WinForms
 {
     partial class FAbout : FormBase
     {
-        public FAbout()
+        private readonly IUserConfigManager userConfigManager;
+        private readonly UpdateChecker updateChecker;
+
+        private bool hasCheckedForUpdates;
+        private UpdateInfo update;
+
+        public FAbout(AppConfigManager appConfigManager, IUserConfigManager userConfigManager, UpdateChecker updateChecker)
         {
+            this.userConfigManager = userConfigManager;
+            this.updateChecker = updateChecker;
+
             RestoreFormState = false;
             InitializeComponent();
             labelProductName.Text = AssemblyProduct;
@@ -43,9 +36,107 @@ namespace NAPS2.WinForms
             labelCopyright.Text = labelCopyright.Text.Replace("\\n", "\n");
             // Grow the form to fit the copyright text if necessary
             Width = Math.Max(Width, labelCopyright.Right + 25);
+
+            if (appConfigManager.Config.HideDonateButton)
+            {
+                btnDonate.Visible = false;
+            }
         }
 
-        #region Assembly Attribute Accessors
+        protected override void OnLoad(object sender, EventArgs eventArgs)
+        {
+            new LayoutManager(this)
+                .Bind(logoPictureBox)
+                    .TopTo(() => Height / 2)
+                .Activate();
+
+#if INSTALLER_MSI
+            ConditionalControls.Hide(cbCheckForUpdates, 15);
+            ConditionalControls.Hide(lblUpdateStatus, 5);
+#else
+            cbCheckForUpdates.Checked = userConfigManager.Config.CheckForUpdates;
+            UpdateControls();
+            DoUpdateCheck();
+#endif
+        }
+
+        private void DoUpdateCheck()
+        {
+            if (cbCheckForUpdates.Checked)
+            {
+                updateChecker.CheckForUpdates().ContinueWith(task =>
+                {
+                    if (task.IsFaulted)
+                    {
+                        Log.ErrorException("Error checking for updates", task.Exception);
+                    }
+                    else
+                    {
+                        userConfigManager.Config.LastUpdateCheckDate = DateTime.Now;
+                        userConfigManager.Save();
+                    }
+                    update = task.Result;
+                    hasCheckedForUpdates = true;
+                    SafeInvoke(UpdateControls);
+                });
+            }
+        }
+
+        private void UpdateControls()
+        {
+            const int margin = 5;
+            if (cbCheckForUpdates.Checked)
+            {
+                if (lblUpdateStatus.Visible == false && linkInstall.Visible == false)
+                {
+                    ConditionalControls.Show(lblUpdateStatus, margin);
+                }
+                if (hasCheckedForUpdates)
+                {
+                    if (update == null)
+                    {
+                        lblUpdateStatus.Text = MiscResources.NoUpdates;
+                        lblUpdateStatus.Visible = true;
+                        linkInstall.Visible = false;
+                    }
+                    else
+                    {
+                        linkInstall.Text = string.Format(MiscResources.Install, update.Name);
+                        lblUpdateStatus.Visible = false;
+                        linkInstall.Visible = true;
+                    }
+                }
+                else
+                {
+                    lblUpdateStatus.Text = MiscResources.CheckingForUpdates;
+                    lblUpdateStatus.Visible = true;
+                    linkInstall.Visible = false;
+                }
+            }
+            else
+            {
+                ConditionalControls.Hide(lblUpdateStatus, margin);
+                ConditionalControls.Hide(linkInstall, margin);
+            }
+        }
+
+        private void cbCheckForUpdates_CheckedChanged(object sender, EventArgs e)
+        {
+            userConfigManager.Config.CheckForUpdates = cbCheckForUpdates.Checked;
+            userConfigManager.Save();
+            UpdateControls();
+            DoUpdateCheck();
+        }
+
+        private void linkInstall_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (update != null)
+            {
+                updateChecker.StartUpdate(update);
+            }
+        }
+
+#region Assembly Attribute Accessors
 
         private static string GetAssemblyAttributeValue<T>(Func<T, string> selector)
         {
@@ -70,47 +161,17 @@ namespace NAPS2.WinForms
             }
         }
 
-        public string AssemblyVersion
-        {
-            get
-            {
-                return Assembly.GetEntryAssembly().GetName().Version.ToString();
-            }
-        }
+        public string AssemblyVersion => Assembly.GetEntryAssembly().GetName().Version.ToString();
 
-        public string AssemblyDescription
-        {
-            get
-            {
-                return GetAssemblyAttributeValue<AssemblyDescriptionAttribute>(x => x.Description);
-            }
-        }
+        public string AssemblyDescription => GetAssemblyAttributeValue<AssemblyDescriptionAttribute>(x => x.Description);
 
-        public string AssemblyProduct
-        {
-            get
-            {
-                return GetAssemblyAttributeValue<AssemblyProductAttribute>(x => x.Product);
-            }
-        }
+        public string AssemblyProduct => GetAssemblyAttributeValue<AssemblyProductAttribute>(x => x.Product);
 
-        public string AssemblyCopyright
-        {
-            get
-            {
-                return GetAssemblyAttributeValue<AssemblyCopyrightAttribute>(x => x.Copyright);
-            }
-        }
+        public string AssemblyCopyright => GetAssemblyAttributeValue<AssemblyCopyrightAttribute>(x => x.Copyright);
 
-        public string AssemblyCompany
-        {
-            get
-            {
-                return GetAssemblyAttributeValue<AssemblyCompanyAttribute>(x => x.Company);
-            }
-        }
+        public string AssemblyCompany => GetAssemblyAttributeValue<AssemblyCompanyAttribute>(x => x.Company);
 
-        #endregion
+#endregion
 
         private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
@@ -120,6 +181,11 @@ namespace NAPS2.WinForms
         private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             Process.Start(linkLabel2.Text);
+        }
+
+        private void btnDonate_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.naps2.com/donate");
         }
     }
 }

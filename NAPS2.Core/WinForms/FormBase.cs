@@ -5,10 +5,11 @@ using System.Linq;
 using System.Windows.Forms;
 using NAPS2.Config;
 using NAPS2.Scan;
+using NAPS2.Util;
 
 namespace NAPS2.WinForms
 {
-    public class FormBase : Form
+    public class FormBase : Form, IInvoker
     {
         private bool loaded;
 
@@ -88,6 +89,41 @@ namespace NAPS2.WinForms
         public void Invoke(Action action)
         {
             ((Control) this).Invoke(action);
+        }
+
+        public T InvokeGet<T>(Func<T> func)
+        {
+            T value = default;
+            Invoke(() => value = func());
+            return value;
+        }
+
+        public void SafeInvoke(Action action)
+        {
+            try
+            {
+                Invoke(action);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        public void SafeInvokeAsync(Action action)
+        {
+            try
+            {
+                BeginInvoke(action);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         #endregion
@@ -171,7 +207,7 @@ namespace NAPS2.WinForms
         {
             if (SaveFormState)
             {
-                UserConfigManager.Save();
+                UserConfigManager?.Save();
             }
         }
 

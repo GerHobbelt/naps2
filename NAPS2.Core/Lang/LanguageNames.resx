@@ -234,4 +234,13 @@
   <data name="sl" xml:space="preserve">
     <value>Slovenščina</value>
   </data>
+  <data name="nn" xml:space="preserve">
+    <value>Nynorsk</value>
+  </data>
+  <data name="si" xml:space="preserve">
+    <value>සිංහල</value>
+  </data>
+  <data name="ja" xml:space="preserve">
+    <value>日本語</value>
+  </data>
 </root>

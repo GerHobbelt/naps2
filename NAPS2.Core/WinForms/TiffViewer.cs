@@ -1,23 +1,3 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -57,35 +37,9 @@ namespace NAPS2.WinForms
             }
         }
 
-        public int ImageWidth
-        {
-            get
-            {
-                if (image != null)
-                {
-                    return image.Width;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
+        public int ImageWidth => image?.Width ?? 0;
 
-        public int ImageHeight
-        {
-            get
-            {
-                if (image != null)
-                {
-                    return image.Height;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-        }
+        public int ImageHeight => image?.Height ?? 0;
 
         public double Zoom
         {
@@ -93,10 +47,16 @@ namespace NAPS2.WinForms
             {
                 if (image != null)
                 {
-                    xzoom = Math.Max(Math.Min(value, 1000), 10);
-                    double displayWidth = image.Width * ((double)xzoom / 100);
-                    double displayHeight = image.Height * ((double)xzoom / 100) * (image.HorizontalResolution / (double)image.VerticalResolution);
+                    double maxZoom = Math.Sqrt(1e8 / (image.Width * (double) image.Height)) * 100;
+                    xzoom = Math.Max(Math.Min(value, maxZoom), 10);
+                    double displayWidth = image.Width * (xzoom / 100);
+                    double displayHeight = image.Height * (xzoom / 100);
+                    if (image.HorizontalResolution > 0 && image.VerticalResolution > 0)
+                    {
+                        displayHeight *= image.HorizontalResolution / (double)image.VerticalResolution;
+                    }
                     pbox.Image = image;
+                    pbox.BorderStyle = BorderStyle.FixedSingle;
                     pbox.Width = (int)displayWidth;
                     pbox.Height = (int)displayHeight;
                     if (ZoomChanged != null)
@@ -106,25 +66,24 @@ namespace NAPS2.WinForms
                     }
                 }
             }
-            get
-            { return xzoom; }
+            get => xzoom;
         }
 
         public event EventHandler<EventArgs> ZoomChanged;
 
         private void ClearImage()
         {
-            pbox.Image = null;
-            pbox.Width = 1;
-            pbox.Height = 1;
+            pbox.Image = Icons.hourglass_grey;
+            pbox.BorderStyle = BorderStyle.None;
+            pbox.Width = 32;
+            pbox.Height = 32;
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                if (components != null)
-                    components.Dispose();
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }

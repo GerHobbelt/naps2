@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using NAPS2.Scan;
 using NAPS2.Scan.Images;
 
@@ -15,8 +14,9 @@ namespace NAPS2.ImportExport
         /// </summary>
         /// <param name="scans"></param>
         /// <param name="separator"></param>
+        /// <param name="splitSize"></param>
         /// <returns></returns>
-        public static IEnumerable<List<ScannedImage>> SeparateScans(IEnumerable<IEnumerable<ScannedImage>> scans, SaveSeparator separator)
+        public static IEnumerable<List<ScannedImage>> SeparateScans(IEnumerable<IEnumerable<ScannedImage>> scans, SaveSeparator separator, int splitSize = 1)
         {
             if (separator == SaveSeparator.FilePerScan)
             {
@@ -27,11 +27,12 @@ namespace NAPS2.ImportExport
             }
             else if (separator == SaveSeparator.FilePerPage)
             {
-                foreach (var scan in scans)
+                splitSize = Math.Max(splitSize, 1);
+                foreach (var scan in scans.Select(x => x.ToList()))
                 {
-                    foreach (var image in scan)
+                    for (int i = 0; i < scan.Count; i += splitSize)
                     {
-                        yield return new List<ScannedImage> { image };
+                        yield return scan.Skip(i).Take(splitSize).ToList();
                     }
                 }
             }

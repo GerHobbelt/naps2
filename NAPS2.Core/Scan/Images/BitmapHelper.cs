@@ -1,28 +1,9 @@
-/*
-    NAPS2 (Not Another PDF Scanner 2)
-    http://sourceforge.net/projects/naps2/
-    
-    Copyright (C) 2009       Pavel Sorejs
-    Copyright (C) 2012       Michael Adams
-    Copyright (C) 2013       Peter De Leeuw
-    Copyright (C) 2012-2015  Ben Olden-Cooligan
-
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
+using NAPS2.Util;
 
 namespace NAPS2.Scan.Images
 {
@@ -71,7 +52,7 @@ namespace NAPS2.Scan.Images
         /// <returns>a 1bpp copy of the bitmap</returns>
         public static Bitmap CopyToBpp(Bitmap b, int bpp)
         {
-            if (bpp != 1 && bpp != 8) throw new ArgumentException("1 or 8", "bpp");
+            if (bpp != 1 && bpp != 8) throw new ArgumentException(@"1 or 8", nameof(bpp));
 
             // Plan: built into Windows GDI is the ability to convert
             // bitmaps from one format to another. Most of the time, this
@@ -124,8 +105,8 @@ namespace NAPS2.Scan.Images
             // optimal: a difficult topic: http://en.wikipedia.org/wiki/Color_quantization
             // 
             // Now create the indexed bitmap "hbm0"
-            IntPtr bits0; // not used for our purposes. It returns a pointer to the raw bits that make up the bitmap.
-            IntPtr hbm0 = CreateDIBSection(IntPtr.Zero, ref bmi, DIB_RGB_COLORS, out bits0, IntPtr.Zero, 0);
+            // not used for our purposes. It returns a pointer to the raw bits that make up the bitmap.
+            IntPtr hbm0 = CreateDIBSection(IntPtr.Zero, ref bmi, DIB_RGB_COLORS, out _, IntPtr.Zero, 0);
             //
             // Step (3): use GDI's BitBlt function to copy from original hbitmap into monocrhome bitmap
             // GDI programming is kind of confusing... nb. The GDI equivalent of "Graphics" is called a "DC".
@@ -140,7 +121,7 @@ namespace NAPS2.Scan.Images
             BitBlt(hdc0, 0, 0, w, h, hdc, 0, 0, SRCCOPY);
             // Step (4): convert this monochrome hbitmap back into a Bitmap:
             Bitmap b0 = Image.FromHbitmap(hbm0);
-            b0.SetResolution(b.HorizontalResolution, b.VerticalResolution);
+            b0.SafeSetResolution(b.HorizontalResolution, b.VerticalResolution);
             //
             // Finally some cleanup.
             DeleteDC(hdc);

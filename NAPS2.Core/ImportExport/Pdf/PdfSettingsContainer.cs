@@ -7,19 +7,19 @@ namespace NAPS2.ImportExport.Pdf
 {
     public class PdfSettingsContainer
     {
-        private readonly UserConfigManager userConfigManager;
+        private readonly IUserConfigManager userConfigManager;
 
         private PdfSettings localPdfSettings;
 
-        public PdfSettingsContainer(UserConfigManager userConfigManager)
+        public PdfSettingsContainer(IUserConfigManager userConfigManager)
         {
             this.userConfigManager = userConfigManager;
         }
 
         public PdfSettings PdfSettings
         {
-            get { return localPdfSettings ?? userConfigManager.Config.PdfSettings ?? new PdfSettings(); }
-            set { localPdfSettings = value; }
+            get => localPdfSettings ?? userConfigManager.Config.PdfSettings ?? new PdfSettings();
+            set => localPdfSettings = value;
         }
     }
 }

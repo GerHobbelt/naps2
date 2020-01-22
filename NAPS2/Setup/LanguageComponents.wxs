@@ -20,16 +20,19 @@
       <ComponentRef Id="LangComponent_hr" />
       <ComponentRef Id="LangComponent_hu" />
       <ComponentRef Id="LangComponent_it" />
+      <ComponentRef Id="LangComponent_ja" />
       <ComponentRef Id="LangComponent_ko" />
       <ComponentRef Id="LangComponent_lt" />
       <ComponentRef Id="LangComponent_lv" />
       <ComponentRef Id="LangComponent_nb" />
       <ComponentRef Id="LangComponent_nl" />
+      <ComponentRef Id="LangComponent_nn" />
       <ComponentRef Id="LangComponent_pl" />
       <ComponentRef Id="LangComponent_pt_BR" />
       <ComponentRef Id="LangComponent_pt_PT" />
       <ComponentRef Id="LangComponent_ro" />
       <ComponentRef Id="LangComponent_ru" />
+      <ComponentRef Id="LangComponent_si" />
       <ComponentRef Id="LangComponent_sk" />
       <ComponentRef Id="LangComponent_sl" />
       <ComponentRef Id="LangComponent_sq" />
@@ -129,6 +132,11 @@
           <File Source="..\NAPS2\bin\InstallerMSI\it\NAPS2.Core.resources.dll" Id="LangFile_it" />
         </Component>
       </Directory>
+      <Directory Id="LangFolder_ja" Name="ja">
+        <Component Id="LangComponent_ja">
+          <File Source="..\NAPS2\bin\InstallerMSI\ja\NAPS2.Core.resources.dll" Id="LangFile_ja" />
+        </Component>
+      </Directory>
       <Directory Id="LangFolder_ko" Name="ko">
         <Component Id="LangComponent_ko">
           <File Source="..\NAPS2\bin\InstallerMSI\ko\NAPS2.Core.resources.dll" Id="LangFile_ko" />
@@ -154,6 +162,11 @@
           <File Source="..\NAPS2\bin\InstallerMSI\nl\NAPS2.Core.resources.dll" Id="LangFile_nl" />
         </Component>
       </Directory>
+      <Directory Id="LangFolder_nn" Name="nn">
+        <Component Id="LangComponent_nn">
+          <File Source="..\NAPS2\bin\InstallerMSI\nn\NAPS2.Core.resources.dll" Id="LangFile_nn" />
+        </Component>
+      </Directory>
       <Directory Id="LangFolder_pl" Name="pl">
         <Component Id="LangComponent_pl">
           <File Source="..\NAPS2\bin\InstallerMSI\pl\NAPS2.Core.resources.dll" Id="LangFile_pl" />
@@ -177,6 +190,11 @@
       <Directory Id="LangFolder_ru" Name="ru">
         <Component Id="LangComponent_ru">
           <File Source="..\NAPS2\bin\InstallerMSI\ru\NAPS2.Core.resources.dll" Id="LangFile_ru" />
+        </Component>
+      </Directory>
+      <Directory Id="LangFolder_si" Name="si">
+        <Component Id="LangComponent_si">
+          <File Source="..\NAPS2\bin\InstallerMSI\si\NAPS2.Core.resources.dll" Id="LangFile_si" />
         </Component>
       </Directory>
       <Directory Id="LangFolder_sk" Name="sk">
