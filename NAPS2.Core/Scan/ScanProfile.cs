@@ -29,7 +29,8 @@ namespace NAPS2.Scan
             Quality = 75;
             BlankPageWhiteThreshold = 70;
             BlankPageCoverageThreshold = 25;
-            WiaDelayBetweenScansSeconds = 2.0;
+            WiaDelayBetweenScansSeconds = 2.0;            
+            HistogramStretchConfig = new HistogramStretchParams();
         }
 
         public ScanProfile Clone()
@@ -38,6 +39,10 @@ namespace NAPS2.Scan
             if (profile.AutoSaveSettings != null)
             {
                 profile.AutoSaveSettings = AutoSaveSettings.Clone();
+            }
+            if(profile.HistogramStretchConfig != null)
+            {
+                profile.HistogramStretchConfig = HistogramStretchConfig.Clone();
             }
             return profile;
         }
@@ -123,6 +128,9 @@ namespace NAPS2.Scan
         public bool FlipDuplexedPages { get; set; }
 
         public KeyValueScanOptions KeyValueOptions { get; set; }
+
+        public bool StretchHistogram { get; set; }
+        public HistogramStretchParams HistogramStretchConfig { get; set; }
     }
 
     [Serializable]

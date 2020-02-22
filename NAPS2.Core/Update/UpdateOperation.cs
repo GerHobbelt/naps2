@@ -196,7 +196,7 @@ namespace NAPS2.Update
 
         private bool VerifySignature()
         {
-            var cert = new X509Certificate2(ClientCreds.naps2_public);
+            var cert = new X509Certificate2(NAPS2.ClientCreds.naps2_public);
             var csp = (RSACryptoServiceProvider)cert.PublicKey.Key;
             return csp.VerifyHash(update.Sha1, CryptoConfig.MapNameToOID("SHA1"), update.Signature);
         }

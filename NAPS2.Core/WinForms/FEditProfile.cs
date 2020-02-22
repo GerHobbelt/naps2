@@ -320,7 +320,9 @@ namespace NAPS2.WinForms
 
                 ExcludeBlankPages = ScanProfile.ExcludeBlankPages,
                 BlankPageWhiteThreshold = ScanProfile.BlankPageWhiteThreshold,
-                BlankPageCoverageThreshold = ScanProfile.BlankPageCoverageThreshold
+                BlankPageCoverageThreshold = ScanProfile.BlankPageCoverageThreshold,
+                StretchHistogram = ScanProfile.StretchHistogram,
+                HistogramStretchConfig = ScanProfile.HistogramStretchConfig
             };
         }
 
